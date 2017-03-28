@@ -2,6 +2,7 @@ const Transform = require('./geo/transform');
 const Painter = require('./render/painter');
 const Style = require('./style/style');
 const Camera = require('./ui/camera');
+const TileCoord = require('./source/tile_coord');
 
 const SIZE = 512;
 
@@ -23,6 +24,8 @@ class MapboxSingleTile extends Camera {
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
+    this._sourceCaches = this._style.sourceCaches
+
   }
 
   showCanvasForDebug(){
@@ -45,21 +48,33 @@ class MapboxSingleTile extends Camera {
     if (!this._gl) {
       throw new Error('Failed to initialize WebGL');
     }
-    this._painter = new Painter(this._gl, this._transform);
-    this._painter.resize(SIZE, SIZE);
+    this.painter = new Painter(this._gl, this._transform);
+    this.painter.resize(SIZE, SIZE);
   }
 
 
   renderTile(z, x, y, options, cb){
     // TODO: use x and y properly...
+    z = z || 15; x = x || 16370; y = y || 10900;
+    
     this.jumpTo({
       center: m.map.getCenter().toJSON(),  //{Lat:, Lng: }
       zoom: z || 15
     });
 
-    this._style._updateSources(this._transform);
+    for(var k in this._sourceCaches){
+      this._sourceCaches[k]._coveredTiles = {};
+      this._sourceCaches[k].transform = this._transform;
+      this._sourceCaches[k].addTile(new TileCoord(z,x,y,0));
+    }
+    /*
+    var tileKeys = Object.keys(sourceCache._tiles);
+    for(var k in tileKeys){
+      sourceCache.removeTile(k);
+    }
+    */
 
-    this._painter.render(this._style, {
+    this.painter.render(this._style, {
       showTileBoundaries: this._initOptions.showTileBoundaries,
       showOverdrawInspector: this._initOptions.showOverdrawInspector
     });

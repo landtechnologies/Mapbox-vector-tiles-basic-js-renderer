@@ -10,15 +10,6 @@ const mat4 = glmatrix.mat4;
 
 const SIZE = 512;
 
-window.mat4 = mat4;
-
-mat4.str = function(a) { // better than version in gl-matrix src..and don't need to worry about minification
-    return 'mat4('     + a.slice(0,4).join("  ") + 
-            "\n      " + a.slice(4,8).join("  ") + 
-            "\n      " + a.slice(8,12).join("  ") +
-            "\n      " + a.slice(12,16).join("  ") + ')';
-}
-
 class MapboxSingleTile extends Camera {
 
   constructor(options) {
@@ -75,6 +66,20 @@ class MapboxSingleTile extends Camera {
     this.painter.resize(SIZE, SIZE);
   }
 
+  applyStyles(z) {
+    // alternative to style.js@_recalculate
+    for (const sourceId in this._sourceCaches){
+      this._sourceCaches[sourceId].used = false;
+    }
+    for(var layerId of this._style._order){
+      const layer = this._style._layers[layerId];
+      layer.recalculate(z);
+      if (!layer.isHidden(z) && layer.source) {
+        this._sourceCaches[layer.source].used = true;
+      }
+    }
+    this._style._applyClasses([], {transition: false});
+  }
 
   renderTile(z, x, y, options, cb){
     // TODO: use x and y properly...
@@ -84,6 +89,8 @@ class MapboxSingleTile extends Camera {
       center: m.map.getCenter().toJSON(),  //{Lat:, Lng: }
       zoom: z || 15
     });
+
+    this.applyStyles(z); // TODO: only do this if zoom has changed
 
     // TODO: remove  old tiles from cache
     for(var k in this._sourceCaches){

@@ -47,7 +47,8 @@ class MapboxSingleTile extends Camera {
     this._canvas.style.position = "fixed";
     this._canvas.style.top = "20px";
     this._canvas.style.right = "20px";
-    this._canvas.style.background = "rgba(125,125,125,0.2)";
+    this._canvas.style.background = "#ccc";
+    this._canvas.style.border = "1px solid red";
   }
 
   _createGlContext(){
@@ -89,19 +90,19 @@ class MapboxSingleTile extends Camera {
     delete this._renderingTiles[e.coord.id];
 
     var z = e.coord.z;
-
     this.applyStyles(z); // TODO: only do this if zoom has changed      
     this.painter.render(this._style, {
       showTileBoundaries: this._initOptions.showTileBoundaries,
       showOverdrawInspector: this._initOptions.showOverdrawInspector
     });
 
-    var ret = document.createElement('canvas');
-    ret.width = SIZE;
-    ret.height = SIZE;
-    ret.getContext('2d').drawImage(this._canvas, 0, 0);
-    state.next && state.next(ret);
-
+    while(state.callbacks.length){
+      var ret = document.createElement('canvas');
+      ret.width = SIZE;
+      ret.height = SIZE;
+      ret.getContext('2d').drawImage(this._canvas, 0, 0);
+      state.callbacks.shift()(ret);
+    }
   }
   
   _initSourcesCaches(){
@@ -119,12 +120,16 @@ class MapboxSingleTile extends Camera {
   renderTile(z, x, y, options, next){
     this._initSourcesCaches();
 
-    // TODO: work out why this is still needed
-    this.jumpTo({ zoom: z });
+    this.jumpTo({ zoom: z }); // TODO: work out why this is still needed
     
     var coords = new TileCoord(z, x, y, 0);
+    if(this._renderingTiles[coords.id]){
+      next && this._renderingTiles[coords.id].callbacks.push(next);
+      return;
+    }
+
     var state = this._renderingTiles[coords.id] = {
-      next: next,
+      callbacks: [next],
       awaitingSources: 0
     };
     for(var k in this._sourceCaches){

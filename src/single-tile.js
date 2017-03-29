@@ -30,14 +30,14 @@ class MapboxSingleTile extends Camera {
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
     this._sourceCaches = this._style.sourceCaches
-
+    this._renderingTiles = {};
   }
 
   _transform_calculatePosMatrix(tileCoord, maxZoom) {
     // override for this._transform.calculatePosMatrix (patched in constructor, above)
     const S = 4092; // I think this is the size of the tile in its own coordiante scheme, not sure why we have to x2
     const posMatrix = mat4.identity(new Float64Array(16));
-    mat4.scale(posMatrix, posMatrix, [1.8/(2*S),-1.8/(2*S),1]); // TODO: change 1.8 to 2
+    mat4.scale(posMatrix, posMatrix, [1/S,-1/S,1]);
     mat4.translate(posMatrix, posMatrix, [-S,-S,0]);
     return new Float32Array(posMatrix);
   }
@@ -64,6 +64,7 @@ class MapboxSingleTile extends Camera {
     }
     this.painter = new Painter(this._gl, this._transform);
     this.painter.resize(SIZE, SIZE);
+    this.painter.style = this._style;
   }
 
   applyStyles(z) {
@@ -81,29 +82,61 @@ class MapboxSingleTile extends Camera {
     this._style._applyClasses([], {transition: false});
   }
 
-  renderTile(z, x, y, options, cb){
-    // TODO: use x and y properly...
-    z = z || 15; x = x || 16370; y = y || 10900;
-    
-    this.jumpTo({
-      center: m.map.getCenter().toJSON(),  //{Lat:, Lng: }
-      zoom: z || 15
-    });
-
-    this.applyStyles(z); // TODO: only do this if zoom has changed
-
-    // TODO: remove  old tiles from cache
-    for(var k in this._sourceCaches){
-      this._sourceCaches[k]._coveredTiles = {};
-      this._sourceCaches[k].transform = this._transform;
-      this._sourceCaches[k].addTile(new TileCoord(z,x,y,0));
+  _renderTileNowDataIsAvailable(e){
+    var state = this._renderingTiles[e.coord.id];
+    if(--state.awaitingSources > 0){
+      return;
     }
-    
+
+    var z = e.coord.z;
+
+    this.applyStyles(z); // TODO: only do this if zoom has changed      
     this.painter.render(this._style, {
       showTileBoundaries: this._initOptions.showTileBoundaries,
       showOverdrawInspector: this._initOptions.showOverdrawInspector
     });
-    cb && cb(null);
+
+    delete this._renderingTiles[e.coord.id];
+    state.next && state.next();
+
+  }
+  
+  _initSourcesCaches(){
+    if(this._initSourcesCachesDone){
+      return;
+    }
+    for(var k in this._sourceCaches){
+      this._sourceCaches[k]._coveredTiles = {};
+      this._sourceCaches[k].transform = this._transform;
+      this._sourceCaches[k].on('data', this._renderTileNowDataIsAvailable.bind(this));
+    }
+    this._initSourcesCachesDone = true;
+  }
+
+  renderTile(z, x, y, options, next){
+    // TODO: use x and y properly...
+    z = z || 15; x = x || 16370; y = y || 10900;
+
+    this._initSourcesCaches();
+
+    this.jumpTo({ // TODO: work out why this is still needed
+      center: m.map.getCenter().toJSON(),  //{Lat:, Lng: }
+      zoom: z || 15
+    });
+    
+    var coords = new TileCoord(z, x, y, 0);
+    var state = this._renderingTiles[coords.id] = {
+      next: next,
+      awaitingSources: 0
+    };
+    for(var k in this._sourceCaches){
+      var tile = this._sourceCaches[k].addTile(coords);
+      !tile.hasData() && state.awaitingSources++;
+    }
+    if(state.awaitingSources == 0){
+      this._renderTileNowDataIsAvailable({coord: coords});
+    }
+    
   }
 
 }

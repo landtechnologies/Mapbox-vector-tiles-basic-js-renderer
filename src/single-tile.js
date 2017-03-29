@@ -8,7 +8,7 @@ const Transform = require('./geo/transform'),
 
 const mat4 = glmatrix.mat4;
 
-const SIZE = 512;
+const SIZE = 256;
 
 class MapboxSingleTile extends Camera {
 
@@ -47,8 +47,7 @@ class MapboxSingleTile extends Camera {
     this._canvas.style.position = "fixed";
     this._canvas.style.top = "20px";
     this._canvas.style.right = "20px";
-    this._canvas.style.border = "1px solid red";
-    this._canvas.style.background = "#666";
+    this._canvas.style.background = "rgba(125,125,125,0.2)";
   }
 
   _createGlContext(){
@@ -87,6 +86,7 @@ class MapboxSingleTile extends Camera {
     if(--state.awaitingSources > 0){
       return;
     }
+    delete this._renderingTiles[e.coord.id];
 
     var z = e.coord.z;
 
@@ -96,8 +96,11 @@ class MapboxSingleTile extends Camera {
       showOverdrawInspector: this._initOptions.showOverdrawInspector
     });
 
-    delete this._renderingTiles[e.coord.id];
-    state.next && state.next();
+    var ret = document.createElement('canvas');
+    ret.width = SIZE;
+    ret.height = SIZE;
+    ret.getContext('2d').drawImage(this._canvas, 0, 0);
+    state.next && state.next(ret);
 
   }
   
@@ -114,15 +117,10 @@ class MapboxSingleTile extends Camera {
   }
 
   renderTile(z, x, y, options, next){
-    // TODO: use x and y properly...
-    z = z || 15; x = x || 16370; y = y || 10900;
-
     this._initSourcesCaches();
 
-    this.jumpTo({ // TODO: work out why this is still needed
-      center: m.map.getCenter().toJSON(),  //{Lat:, Lng: }
-      zoom: z || 15
-    });
+    // TODO: work out why this is still needed
+    this.jumpTo({ zoom: z });
     
     var coords = new TileCoord(z, x, y, 0);
     var state = this._renderingTiles[coords.id] = {

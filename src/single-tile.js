@@ -8,7 +8,7 @@ const Transform = require('./geo/transform'),
 
 const mat4 = glmatrix.mat4;
 
-const SIZE = 256;
+const DEFAULT_SIZE = 256;
 
 class MapboxSingleTile extends Camera {
 
@@ -16,25 +16,31 @@ class MapboxSingleTile extends Camera {
     var transform =  new Transform(options.minZoom, options.maxZoom, options.renderWorldCopies);
     options = options || {};
     super(transform, options);  
-    transform.calculatePosMatrix = this._transform_calculatePosMatrix.bind(transform);
     this._transform = transform;
     this._initOptions = options;
     this._style = new Style(options.style, this);
     this._style.setEventedParent(this, {style: this._style});
     this._canvas = document.createElement('canvas');
-    this._canvas.width = SIZE;
-    this._canvas.height = SIZE;
-
-    this._transform.resize(SIZE, SIZE);
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
+    this._setSize(DEFAULT_SIZE);
     this._sourceCaches = this._style.sourceCaches
     this._renderingTiles = {};
   }
 
-  _transform_calculatePosMatrix(tileCoord, maxZoom) {
-    // override for this._transform.calculatePosMatrix (patched in constructor, above)
+  _setSize(s){
+    if(s == this._size){
+      return;
+    }
+    this._size = s;
+    this._canvas.width = s;
+    this._canvas.height = s;
+    this._transform.resize(s, s);   
+    this.painter.resize(s, s); 
+  }
+
+  _calculatePosMatrix(tileCoord) {
     const S = 4092; // I think this is the size of the tile in its own coordiante scheme, not sure why we have to x2
     const posMatrix = mat4.identity(new Float64Array(16));
     mat4.scale(posMatrix, posMatrix, [1/S,-1/S,1]);
@@ -63,7 +69,6 @@ class MapboxSingleTile extends Camera {
       throw new Error('Failed to initialize WebGL');
     }
     this.painter = new Painter(this._gl, this._transform);
-    this.painter.resize(SIZE, SIZE);
     this.painter.style = this._style;
   }
 
@@ -90,18 +95,29 @@ class MapboxSingleTile extends Camera {
     delete this._renderingTiles[e.coord.id];
 
     var z = e.coord.z;
-    this.applyStyles(z); // TODO: only do this if zoom has changed      
-    this.painter.render(this._style, {
-      showTileBoundaries: this._initOptions.showTileBoundaries,
-      showOverdrawInspector: this._initOptions.showOverdrawInspector
-    });
 
-    while(state.callbacks.length){
-      var ret = document.createElement('canvas');
-      ret.width = SIZE;
-      ret.height = SIZE;
-      ret.getContext('2d').drawImage(this._canvas, 0, 0);
-      state.callbacks.shift()(ret);
+    for (var v in state.variants){
+      var options = state.variants[v].options;
+      var callbacks = state.variants[v].callbacks;
+      var size = options.size || DEFAULT_SIZE;
+      this.applyStyles(z); // TODO: only do this if zoom has changed      
+      e.coord.posMatrix = this._calculatePosMatrix(e.coord);
+      for(var k in this._sourceCaches){
+        this._sourceCaches[k].getVisibleCoordinates = () => [e.coord];
+      }
+
+      this._setSize(size);
+      this.painter.render(this._style, {
+        showTileBoundaries: this._initOptions.showTileBoundaries,
+        showOverdrawInspector: this._initOptions.showOverdrawInspector
+      });
+      while(callbacks.length){
+        var ret = document.createElement('canvas');
+        ret.width = size;
+        ret.height = size;
+        ret.getContext('2d').drawImage(this._canvas, 0, 0);
+        callbacks.shift()(ret);
+      }
     }
   }
   
@@ -118,24 +134,54 @@ class MapboxSingleTile extends Camera {
   }
 
   renderTile(z, x, y, options, next){
-    this._initSourcesCaches();
+    /* 
+    The tile can be in one of several states:
+      1. Never previously mentioned (or long forgotten about).
+         So need to load data from source(s) before rendering.
+      2. Recently requested, but not ready yet (i.e. in _renderingTiles)
+        a. Requested with the same options as this request
+        b. Requested with different options to this request
+      3. TODO: recently rendered, with resulting image cached for the correct options.
+      4. Previously requested, but image not cached (with correct options).  However
+        data is still available, so no need to wait for data before rendering.
+    */
 
-    this.jumpTo({ zoom: z }); // TODO: work out why this is still needed
-    
-    var coords = new TileCoord(z, x, y, 0);
+    this._initSourcesCaches();
+    this.jumpTo({ zoom: z }); // TODO: work out why this is still needed..might be to do with if layer should be shown
+
+    // Deal with state (2).
+    var coords = new TileCoord(z, x, y, 0);    
+    options = options || {};
+    var optionsKey = JSON.stringify(options);
     if(this._renderingTiles[coords.id]){
-      next && this._renderingTiles[coords.id].callbacks.push(next);
+      if(this._renderingTiles[coords.id].variants[optionsKey]){
+        this._renderingTiles[coords.id].variants[optionsKey].callbacks.push(next);
+      } else {
+        this._renderingTiles[coords.id].variants[optionsKey] = {
+          options: options,
+          callbacks: [next]
+        }
+      }
       return;
     }
 
+
     var state = this._renderingTiles[coords.id] = {
-      callbacks: [next],
-      awaitingSources: 0
+      awaitingSources: 0,
+      variants: {}
     };
+    state.variants[optionsKey] = {
+      options: Object.assign({}, options), // should just be a shallow object, so simply clone is ok
+      callbacks: [next]
+    };
+
     for(var k in this._sourceCaches){
-      var tile = this._sourceCaches[k].addTile(coords);
+      var tile = this._sourceCaches[k].addTile(coords); 
       !tile.hasData() && state.awaitingSources++;
+      // if tile.hasData() is false, the .addTile call above will ultimately lead to state (1) being dealt with.
     }
+
+    // Deal with state (4).
     if(state.awaitingSources == 0){
       this._renderTileNowDataIsAvailable({coord: coords});
     }

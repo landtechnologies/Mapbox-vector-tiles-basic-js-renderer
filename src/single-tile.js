@@ -112,11 +112,7 @@ class MapboxSingleTile extends Camera {
         showOverdrawInspector: this._initOptions.showOverdrawInspector
       });
       while(callbacks.length){
-        var ret = document.createElement('canvas');
-        ret.width = size;
-        ret.height = size;
-        ret.getContext('2d').drawImage(this._canvas, 0, 0);
-        callbacks.shift()(ret);
+        callbacks.shift()(this._canvas);
       }
     }
   }

@@ -4,8 +4,8 @@
 
   renderTile(z, x, y, options, callback)
   
-  The callback is provided with a canvas which has the given
-  tile rendered to it, filling the entire canvas.
+  The callback is provided with (err, canvas) where the canvas has
+  the given tile rendered to it, filling the entire canvas.
   It should consume the image immediately, ie. by using
   drawImage onto a new canvas, as there is no guarantee of
   the lifetime of the image on the canvas.
@@ -51,7 +51,8 @@ const Transform = require('./geo/transform'),
 const mat4 = glmatrix.mat4;
 
 const DEFAULT_SIZE = 256;
-const DEFAULT_CACHE_SIZE = 10;
+const DEFAULT_CACHE_SIZE = 6;
+const TILE_LOAD_TIMEOUT = 15000;
 
 class MapboxSingleTile extends Camera {
 
@@ -71,7 +72,7 @@ class MapboxSingleTile extends Camera {
     this._sourceCaches = this._style.sourceCaches
     this._pendingRenders = {};
     this._useCache = options.cacheSize !== 0;
-    this._useCache && (this._renderedTileCache = new Cache(options.cacheSize || DEFAULT_CACHE_SIZE));
+    this._useCache && (this._renderedTileCache = new Cache(options.cacheSize || DEFAULT_CACHE_SIZE, ()=>{}));
   }
 
   _setSize(s){
@@ -132,11 +133,30 @@ class MapboxSingleTile extends Camera {
     this._style._applyClasses([], {transition: false});
   }
 
+  _renderTileDataFetchFailed(e){
+    var state = this._pendingRenders[e.tile.coord.id];
+    if(!state){
+      return; // timeout already occured
+    }
+    delete this._pendingRenders[e.tile.coord.id];
+    clearTimeout(state.timeout);
+    for(var variantKey in state.variants){
+      var callbacks = state.variants[variantKey].callbacks;
+      while(callbacks.length){
+        callbacks.shift()("fetch failed");
+      }
+    }
+  }
+
   _renderTileNowDataIsAvailable(e){
     var state = this._pendingRenders[e.coord.id];
+    if(!state){
+      return; // timeout already occured
+    }
     if(--state.awaitingSources > 0){
       return;
     }
+    clearTimeout(state.timeout);
     delete this._pendingRenders[e.coord.id];
 
     var z = e.coord.z;
@@ -165,6 +185,10 @@ class MapboxSingleTile extends Camera {
         console.time("drawImage " + e.coord.id + variantKey);
         returnCanvas.getContext('2d').drawImage(this._canvas, 0, 0);
         console.timeEnd("drawImage " + e.coord.id + variantKey);
+        //console.time("drawImage2 " + e.coord.id + variantKey);
+        //returnCanvas.getContext('2d').drawImage(this._canvas, 0, 0);
+        //console.timeEnd("drawImage2 " + e.coord.id + variantKey);
+
         this._renderedTileCache.add(e.coord.id + variantKey, returnCanvas);        
       } else {
         returnCanvas = this._canvas
@@ -174,12 +198,13 @@ class MapboxSingleTile extends Camera {
       // note that recipient must make use of it immediately,
       // i.e. by calling drawImage to a new canvas.
       while(callbacks.length){
-        callbacks.shift()(returnCanvas);
+        callbacks.shift()(null, returnCanvas);
       }
 
     }
   }
   
+
   _initSourcesCaches(){
     if(this._initSourcesCachesDone){
       return;
@@ -188,6 +213,7 @@ class MapboxSingleTile extends Camera {
       this._sourceCaches[k]._coveredTiles = {};
       this._sourceCaches[k].transform = this._transform;
       this._sourceCaches[k].on('data', this._renderTileNowDataIsAvailable.bind(this));
+      this._sourceCaches[k].on('error', this._renderTileDataFetchFailed.bind(this));
     }
     this._initSourcesCachesDone = true;
   }
@@ -204,7 +230,7 @@ class MapboxSingleTile extends Camera {
     
     // Deal with state (3).
     if(this._useCache && this._renderedTileCache.has(coord.id + variantKey)){
-      return next(this._renderedTileCache.get(coord.id + variantKey));
+      return next(null, this._renderedTileCache.get(coord.id + variantKey));
     }
 
     // Deal with state (2).
@@ -227,7 +253,8 @@ class MapboxSingleTile extends Camera {
     };
     state.variants[variantKey] = {
       options: Object.assign({}, options), // should just be a shallow object, so simply clone is ok
-      callbacks: [next]
+      callbacks: [next],
+      timeout: 0
     };
 
     for(var k in this._sourceCaches){
@@ -236,10 +263,22 @@ class MapboxSingleTile extends Camera {
       // if tile.hasData() is false, the .addTile call above will ultimately lead to state (1) being dealt with.
     }
 
-    // Deal with state (4).
     if(state.awaitingSources == 0){
-      this._renderTileNowDataIsAvailable({coord: coord});
+      // Deal with state (4).
+      setTimeout(() => this._renderTileNowDataIsAvailable({coord: coord}), 1);
+    } else {
+      state.timeout = setTimeout(() => {
+        delete this._pendingRenders[coord.id];
+        for(var variantKey in state.variants){
+          var callbacks = state.variants[variantKey].callbacks;
+          while(callbacks.length){
+            callbacks.shift()("fetch timedout");
+          }
+        }
+      }, TILE_LOAD_TIMEOUT);
+
     }
+
     
   }
 

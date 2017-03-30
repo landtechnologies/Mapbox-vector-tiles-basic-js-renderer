@@ -39,10 +39,9 @@
 
 */
 
-const Transform = require('./geo/transform'),
-      Painter = require('./render/painter'),
+const Painter = require('./render/painter'),
       Style = require('./style/style'),
-      Camera = require('./ui/camera'),
+      Evented = require('./util/evented'),
       TileCoord = require('./source/tile_coord'),
       EXTENT = require('./data/extent'),
       glmatrix = require('@mapbox/gl-matrix'),
@@ -54,13 +53,12 @@ const DEFAULT_SIZE = 256;
 const DEFAULT_CACHE_SIZE = 6;
 const TILE_LOAD_TIMEOUT = 15000;
 
-class MapboxSingleTile extends Camera {
+class MapboxSingleTile extends Evented {
 
   constructor(options) {
-    var transform =  new Transform(options.minZoom, options.maxZoom, options.renderWorldCopies);
-    options = options || {};
-    super(transform, options);  
-    this._transform = transform;
+    super();
+    options = options || {}; 
+    this.transform = {zoom: 0, angle: 0, pitch: 0};
     this._initOptions = options;
     this._style = new Style(options.style, this);
     this._style.setEventedParent(this, {style: this._style});
@@ -82,7 +80,7 @@ class MapboxSingleTile extends Camera {
     this._size = s;
     this._canvas.width = s;
     this._canvas.height = s;
-    this._transform.resize(s, s);   
+    this.transform.pixelsToGLUnits = [2 / s, -2 / s];
     this.painter.resize(s, s); 
   }
 
@@ -114,7 +112,7 @@ class MapboxSingleTile extends Camera {
     if (!this._gl) {
       throw new Error('Failed to initialize WebGL');
     }
-    this.painter = new Painter(this._gl, this._transform);
+    this.painter = new Painter(this._gl, this.transform);
     this.painter.style = this._style;
   }
 
@@ -160,6 +158,7 @@ class MapboxSingleTile extends Camera {
     delete this._pendingRenders[e.coord.id];
 
     var z = e.coord.z;
+    this.transform.zoom = z;
     this.applyStyles(z); // TODO: only do this if zoom has changed      
 
     for (var variantKey in state.variants){
@@ -211,7 +210,7 @@ class MapboxSingleTile extends Camera {
     }
     for(var k in this._sourceCaches){
       this._sourceCaches[k]._coveredTiles = {};
-      this._sourceCaches[k].transform = this._transform;
+      this._sourceCaches[k].transform = this.transform;
       this._sourceCaches[k].on('data', this._renderTileNowDataIsAvailable.bind(this));
       this._sourceCaches[k].on('error', this._renderTileDataFetchFailed.bind(this));
     }
@@ -222,8 +221,7 @@ class MapboxSingleTile extends Camera {
     // see note at top of file for explanaiton of the 4 "states" a tile can be in
 
     this._initSourcesCaches();
-    this.jumpTo({ zoom: z }); // TODO: work out why this is still needed..might be to do with if layer should be shown
-
+    
     var coord = new TileCoord(z, x, y, 0);    
     options = options || {};
     var variantKey = JSON.stringify(options);

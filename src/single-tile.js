@@ -41,13 +41,11 @@
 
 const Painter = require('./render/painter'),
       Style = require('./style/style'),
+      EXTENT = require('./data/extent'),
       Evented = require('./util/evented'),
       TileCoord = require('./source/tile_coord'),
-      EXTENT = require('./data/extent'),
-      glmatrix = require('@mapbox/gl-matrix'),
+      mat4 = require('@mapbox/gl-matrix').mat4,
       Cache = require('./util/lru_cache');
-
-const mat4 = glmatrix.mat4;
 
 const DEFAULT_SIZE = 256;
 const DEFAULT_CACHE_SIZE = 6;
@@ -59,6 +57,7 @@ class MapboxSingleTile extends Evented {
     super();
     options = options || {}; 
     this.transform = {zoom: 0, angle: 0, pitch: 0};
+    this._posMatrix = this._calculatePosMatrix(); // doesn't depend on anything!
     this._initOptions = options;
     this._style = new Style(options.style, this);
     this._style.setEventedParent(this, {style: this._style});
@@ -69,8 +68,7 @@ class MapboxSingleTile extends Evented {
     this._setSize(DEFAULT_SIZE);
     this._sourceCaches = this._style.sourceCaches
     this._pendingRenders = {};
-    this._useCache = options.cacheSize !== 0;
-    this._useCache && (this._renderedTileCache = new Cache(options.cacheSize || DEFAULT_CACHE_SIZE, ()=>{}));
+    (options.cacheSize !== 0) && (this._renderedTileCache = new Cache(options.cacheSize || DEFAULT_CACHE_SIZE, ()=>{}));
   }
 
   _setSize(s){
@@ -84,21 +82,12 @@ class MapboxSingleTile extends Evented {
     this.painter.resize(s, s); 
   }
 
-  _calculatePosMatrix(tileCoord) {
-    const S = 4092; // I think this is the size of the tile in its own coordiante scheme, not sure why we have to x2
+  _calculatePosMatrix() {
     const posMatrix = mat4.identity(new Float64Array(16));
-    mat4.scale(posMatrix, posMatrix, [1/S,-1/S,1]);
-    mat4.translate(posMatrix, posMatrix, [-S,-S,0]);
+    const halfExtent = EXTENT/2;
+    mat4.scale(posMatrix, posMatrix, [1/halfExtent, -1/halfExtent, 1]);
+    mat4.translate(posMatrix, posMatrix, [-halfExtent, -halfExtent, 0]);
     return new Float32Array(posMatrix);
-  }
-
-  showCanvasForDebug(){
-    document.body.appendChild(this._canvas);
-    this._canvas.style.position = "fixed";
-    this._canvas.style.top = "20px";
-    this._canvas.style.right = "20px";
-    this._canvas.style.background = "#ccc";
-    this._canvas.style.border = "1px solid red";
   }
 
   _createGlContext(){
@@ -165,7 +154,7 @@ class MapboxSingleTile extends Evented {
       var options = state.variants[variantKey].options;
       var callbacks = state.variants[variantKey].callbacks;
       var size = options.size || DEFAULT_SIZE;
-      e.coord.posMatrix = this._calculatePosMatrix(e.coord);
+      e.coord.posMatrix = this._posMatrix;
       for(var k in this._sourceCaches){
         this._sourceCaches[k].getVisibleCoordinates = () => [e.coord];
       }
@@ -177,17 +166,13 @@ class MapboxSingleTile extends Evented {
       
       // copy the canvas into cache (if required)
       var returnCanvas;
-      if(this._useCache){
+      if(this._renderedTileCache){
         returnCanvas = document.createElement('canvas');
         returnCanvas.width = size;
         returnCanvas.height = size;
         console.time("drawImage " + e.coord.id + variantKey);
         returnCanvas.getContext('2d').drawImage(this._canvas, 0, 0);
         console.timeEnd("drawImage " + e.coord.id + variantKey);
-        //console.time("drawImage2 " + e.coord.id + variantKey);
-        //returnCanvas.getContext('2d').drawImage(this._canvas, 0, 0);
-        //console.timeEnd("drawImage2 " + e.coord.id + variantKey);
-
         this._renderedTileCache.add(e.coord.id + variantKey, returnCanvas);        
       } else {
         returnCanvas = this._canvas
@@ -203,7 +188,6 @@ class MapboxSingleTile extends Evented {
     }
   }
   
-
   _initSourcesCaches(){
     if(this._initSourcesCachesDone){
       return;
@@ -227,7 +211,7 @@ class MapboxSingleTile extends Evented {
     var variantKey = JSON.stringify(options);
     
     // Deal with state (3).
-    if(this._useCache && this._renderedTileCache.has(coord.id + variantKey)){
+    if(this._renderedTileCache && this._renderedTileCache.has(coord.id + variantKey)){
       return next(null, this._renderedTileCache.get(coord.id + variantKey));
     }
 
@@ -278,6 +262,15 @@ class MapboxSingleTile extends Evented {
     }
 
     
+  }
+
+  showCanvasForDebug(){
+    document.body.appendChild(this._canvas);
+    this._canvas.style.position = "fixed";
+    this._canvas.style.top = "20px";
+    this._canvas.style.right = "20px";
+    this._canvas.style.background = "#ccc";
+    this._canvas.style.border = "1px solid red";
   }
 
 }

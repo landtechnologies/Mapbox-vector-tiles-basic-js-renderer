@@ -157,8 +157,12 @@ class MapboxSingleTile extends Evented {
       e.coord.posMatrix = this._posMatrix;
       for(var k in this._sourceCaches){
         this._sourceCaches[k].getVisibleCoordinates = () => [e.coord];
+        for(var id in this._sourceCaches[k]._tiles){
+           this._sourceCaches[k]._tiles[id].tileSize = size;
+        }
       }
       this._setSize(size);
+
       this.painter.render(this._style, {
         showTileBoundaries: this._initOptions.showTileBoundaries,
         showOverdrawInspector: this._initOptions.showOverdrawInspector

@@ -10,27 +10,41 @@
   drawImage onto a new canvas, as there is no guarantee of
   the lifetime of the image on the canvas.
 
-  The width (=height) of the tile rendered is set using the .setResolution method.
-  The style for each layer is set as the "style" field passed in the options
-  object to the constructor, but it can be overriden using the .setPaintProperty
-  method. The filter for a given layer is set with .setFilter.
-  Whenever any of these methods is called, all pending renders are aborted, so you
-  must re-issue them if you still want them.
+  Canceling a render. The renderTile function returns a renderId
+  which can be passed to cancelRender. When canceled, any pending
+  callbacks will be triggered with a "canceled" error, and then
+  never again (guaranteed).
+
+  The initial style for the render is set in {style:} passed to the constructor.
+  However there are several methods for chaning the render options.  Whenever 
+  any one of these is set, all pending renders are canceled (with the "canceled"
+  error sent to pending callbacks)....
+    - setResolution(r) sets the width (equal to height) of the rendered tile
+    - setPaintProperty(layer, property, value) - see mapbox map's method of the same name
+    - setFilter(layer, filter) - see mapbox map's method of the same name
 
   ==========================================
   Notes on development:
 
-  At the point renderTile is called, the given tile can be in one of several states:
-      1. Never previously mentioned (or long forgotten about).
-         So need to load data from source(s) before rendering. (Browser may
-         have the raw files in its cache, so this may not require making a roundtrip
-         to the server, but that optimization is transparent to us).
-      2. Recently requested, but not ready yet (i.e. in _pendingRenders)
-      3. Previously requested, with data still available, so no need to wait before rendering.
+  The property _pendingRenders maps from <coord.id> to an object that 
+  contains of the form {tile, renderId, callbacks: [], ...}.
+  Note this is not a cache: things are removed from the _pendingRenders 
+  when the rendering is completed, we also unload the tile from the worker.
 
-  The property _pendingRenders maps from <coord.id> to an object that contains callbacks.
-  Note this is not a cache: things are removed from the _pendingRenders when the rendering
-  is completed (at which point they are added to _renderedTileCache).
+  When renderTile is called, we get the coord.id value and check for a
+  pending render state, appending the new callback if it exists.  If it does
+  not exist we create a new one, and issue the tile-load request (which has
+  to complete before we can perform the render).  When the resolution/filter/style
+  is updated we clear all pending renders.  Note how each render has a unique
+  renderId, which we can use to track results comming back from the worker to
+  ensure that they are still wanted (rather than canceled or superceded for 
+  the given tile).
+
+  Caching: the browser will cache the raw protobuf files for a few hours 
+  (as we set the cache header on our server to let this happen). In addition
+  to this we might want to implement a cache of "deserialsed" tiles (the 
+  terminology used by mapbox)...this should make it a bit (?) faster to
+  render tiles at different zoom levels and/or with different styles/filters.
 
 */
 
@@ -39,10 +53,33 @@ const Painter = require('./render/painter'),
       EXTENT = require('./data/extent'),
       Evented = require('./util/evented'),
       TileCoord = require('./source/tile_coord'),
-      mat4 = require('@mapbox/gl-matrix').mat4;
+      mat4 = require('@mapbox/gl-matrix').mat4,
+      Source = require('./source/source'),
+      Tile = require('./source/tile');
 
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
+const TILE_CACHE_SIZE = 100;
+
+class Style2 extends Style {
+  constructor(stylesheet, map, options){
+    super(stylesheet, map, options);
+  }
+  addSource(id, source, options){
+    console.assert(!this._source, "can only load one source");
+    this._source = Source.create(id, source, this.dispatcher, this);
+    this._source.tiles = source.tiles;
+    this._source.map = this.map;
+    this._source.setEventedParent(this, {source: this._source});
+    this.sourceCaches[id] = {
+      getSource: () => this._source,
+      getVisibleCoordinates: () => [this._currentCoord],
+      getTile: () => this._currentTile,
+      reload: () => {},
+      serialize: () => this._source.serialize()
+    }; 
+  }
+};
 
 class MapboxSingleTile extends Evented {
 
@@ -51,29 +88,20 @@ class MapboxSingleTile extends Evented {
     this._initOptions = options = options || {}; 
     this.transform = {zoom: 0, angle: 0, pitch: 0, scaleZoom: ()=> 0};
     this._posMatrix = this._calculatePosMatrix(); // doesn't depend on anything!
-    this._style = new Style(Object.assign({}, options.style, {transition: {duration: 0}}), this);
+    this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
-    this._style.on('data', e => (e.dataType === "source") && this._initSourceCache());
     this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
-    
+    this._nextRenderId = 0;
     this._canvas = document.createElement('canvas');
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
     this.setResolution(DEFAULT_RESOLUTION);
-    this._pendingRenders = {};
+    this._pendingRenders = {}; // coord.id => render state
   }
 
-  _initSourceCache(){
-    var sources = Object.keys(this._style.sourceCaches);
-    if(sources.length !== 1){
-      throw "expected exactly 1 source"; // could implement multi-source, but not needed yet
-    }
-    this._sourceCache = this._style.sourceCaches[sources[0]]; 
-    this._sourceCache._coveredTiles = {};
-    this._sourceCache.transform = this.transform;
-    this._sourceCache.on('data', e => e.coord && this._renderTileNowDataIsAvailable(e));
-    this._sourceCache.on('error', e => e.tile &&  this._renderTileDataFetchFailed(e));
+  get _source(){
+    return this._style._source;
   }
 
   _calculatePosMatrix() {
@@ -114,7 +142,6 @@ class MapboxSingleTile extends Evented {
 
   setResolution(r){
     // resolution at which the tile is rendered,
-    // r is the width (=height) of the rendered tile.
     if(r == this._resolution){
       return;
     }
@@ -130,91 +157,81 @@ class MapboxSingleTile extends Evented {
   _cancelAllPending(abortFetch){
     // TODO: handle abortFetch=true
     for(var id in this._pendingRenders){
-      clearTimeout(this._pendingRenders[id].timeout);
+      this._cancelRender(this._pendingRenders[id]);
     }
     this._pendingRenders = {};
   }
 
-  _renderTileDataFetchFailed(e){
-    var state = this._pendingRenders[e.tile.coord.id];
-    if(!state){
-      return; // timeout already occured, or canceled
-    }
-    delete this._pendingRenders[e.tile.coord.id];
-    clearTimeout(state.timeout);
-    for(var variantKey in state.variants){
-      var callbacks = state.variants[variantKey].callbacks;
-      while(callbacks.length){
-        callbacks.shift()("fetch failed");
-      }
-    }
-  }
-
-  _renderTileNowDataIsAvailable(e){
-    var state = this._pendingRenders[e.coord.id];
-    if(!state){
-      return; // timeout already occured, or canceled
-    } else if(--state.awaitingSources > 0){
-      return;
-    } else {
-      clearTimeout(state.timeout);
-      delete this._pendingRenders[e.coord.id];      
-    }
-
-    var z = e.coord.z;
-    this.transform.zoom = z;
-    e.tile.tileSize = this._resolution;
-    e.coord.posMatrix = this._posMatrix;
-    this._sourceCache.getVisibleCoordinates = () => [e.coord];
-    this.painter.render(this._style, {
-      showTileBoundaries: this._initOptions.showTileBoundaries,
-      showOverdrawInspector: this._initOptions.showOverdrawInspector
-    });
-    
-    // return a reference to the main canvas
-    // note that recipient must make use of it immediately,
-    // i.e. by calling drawImage to a new canvas.
+  _cancelRender(state){
     while(state.callbacks.length){
-      state.callbacks.shift()(null, this._canvas);
+      state.callbacks.shift()("canceled");
     }
-
+    clearTimeout(state.timeout);
+    delete this._pendingRenders[state.id];
+    this._source.unloadTile(state.tile);
   }
-  
-  cancelRender(){
-    // TODO: implement, may want to accept an id or something.
+
+  cancelRender(renderId, state){
+    var state = Object.values(this._pendingRenders)
+                      .find(state => state.renderId === renderId);
+    state && this._cancelRender(state);
   }
 
   renderTile(z, x, y, next){
-    // see note at top of file for explanaiton of the 3 "states" a tile can be in   
     var coord = new TileCoord(z, x, y, 0);    
-    
-    // Deal with state (2).
-    if(this._pendingRenders[coord.id]){
-      this._pendingRenders[coord.id].callbacks.push(next);
-      return;
+    var id = coord.id;
+    var state = this._pendingRenders[id];
+    if(state){
+      state.callbacks.push(next);
+      return state.renderId;
     }
 
-    var tile = this._sourceCache.addTile(coord);  
-    var state = this._pendingRenders[coord.id] = {
-      awaitingSources: tile.hasData() ? 0 : 1, // state (1) is dealt with when tile.hasData() is false - see .addTile call above
+    var renderId = ++this._nextRenderId;
+    state = this._pendingRenders[id] = {
+      id: id,
       callbacks: [next],
-      timeout: 0
-    };   
- 
-    if(state.awaitingSources == 0){
-      // Deal with state (3).
-      setTimeout(() => this._renderTileNowDataIsAvailable({coord: coord, tile: tile}), 1);
-
-    } else {
-      // More stuff for state (1)..this state is also mentioned a few lines above.
-      state.timeout = setTimeout(() => {
+      tile: new Tile(coord.wrapped(), this._resolution, z),
+      coord: coord,
+      renderId: renderId,
+      timeout: setTimeout(() => {
         delete this._pendingRenders[coord.id];
         while(state.callbacks.length){
-          state.callbacks.shift()("fetch timedout");
+          state.callbacks.shift()("timeout");
         }
-      }, TILE_LOAD_TIMEOUT);
-    }
- 
+      }, TILE_LOAD_TIMEOUT)
+    };   
+
+    this._source.loadTile(state.tile, err => {
+      state = this._pendingRenders[id];
+      if(!state || state.renderId !== renderId){
+        return; // render for this tile has been canceled, or superceded.
+      }
+
+      if(!err){
+        this.transform.zoom = z;
+        state.tile.tileSize = this._resolution;
+        state.coord.posMatrix = this._posMatrix;
+        this._style._currentCoord = state.coord;
+        this._style._currentTile = state.tile;
+        this.painter.render(this._style, {
+          showTileBoundaries: this._initOptions.showTileBoundaries,
+          showOverdrawInspector: this._initOptions.showOverdrawInspector
+        });
+        this._style._currentCoord = null;
+        this._style._currentTile = null;
+      }
+
+      while(state.callbacks.length){
+        state.callbacks.shift()(err, !err && this._canvas);
+      }
+
+      clearTimeout(state.timeout);
+      delete this._pendingRenders[id];
+      this._source.unloadTile(state.tile);
+      
+    });
+
+    return state.renderId;
   }
 
   showCanvasForDebug(){

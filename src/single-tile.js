@@ -1,19 +1,21 @@
 /*
   This is basically a plugin for mapbox-gl.
-  Asside from the constructor, it provides one main method:
 
-  renderTile(z, x, y, callback)
-  
-  The callback is provided with (err, canvas) where the canvas has
-  the given tile rendered to it, filling the entire canvas.
-  It should consume the image immediately, ie. by using
-  drawImage onto a new canvas, as there is no guarantee of
-  the lifetime of the image on the canvas.
+  Aside from the constructor, it provides one main method:
+    renderTile(z, x, y, canvas2dContext, drawImageSpec, callback)
+  where drawImageSpec needs to have the 2x3=6 properties of the form:
+     [src|dest][size|top|left]
+  If the render is successful the image will be draw onto the specified
+  context using the specified drawImageSpec, and then the callback will
+  be triggered immediately (sync) afterwards with an error/null passed.
+  Errors include "timeout" and "cancel" among other things, and when an
+  error is returned it means the image was not rendered and never will be.
 
-  Canceling a render. The renderTile function returns a renderId
-  which can be passed to cancelRender. When canceled, any pending
-  callbacks will be triggered with a "canceled" error, and then
-  never again (guaranteed).
+  The renderTile function returns a renderId which can be passed
+  to cancelRender. When canceled, any pending callbacks will be
+  triggered with a "canceled" error, and then never again (guaranteed). It
+  is also guarnteed that no image will be rendred to a context after it has
+  been canceled.
 
   The initial style for the render is set in {style:} passed to the constructor.
   However there are several methods for chaning the render options.  Whenever 
@@ -41,10 +43,11 @@
   the given tile).
 
   Caching: the browser will cache the raw protobuf files for a few hours 
-  (as we set the cache header on our server to let this happen). In addition
-  to this we might want to implement a cache of "deserialsed" tiles (the 
-  terminology used by mapbox)...this should make it a bit (?) faster to
-  render tiles at different zoom levels and/or with different styles/filters.
+  (as we set the cache header on our server to let this happen). 
+  Suggestion: In addition to the above, we might want to implement a 
+  cache of "deserialsed" tiles (the terminology used by mapbox)...this should 
+  make it a bit (?) faster to  render tiles at different zoom levels and/or 
+  with diffrent styles/filters. 
 
 */
 
@@ -154,8 +157,7 @@ class MapboxSingleTile extends Evented {
     this._cancelAllPending(false);
   }
 
-  _cancelAllPending(abortFetch){
-    // TODO: handle abortFetch=true
+  _cancelAllPending(){
     for(var id in this._pendingRenders){
       this._cancelRender(this._pendingRenders[id]);
     }
@@ -164,7 +166,7 @@ class MapboxSingleTile extends Evented {
 
   _cancelRender(state){
     while(state.callbacks.length){
-      state.callbacks.shift()("canceled");
+      state.callbacks.shift().func("canceled");
     }
     clearTimeout(state.timeout);
     delete this._pendingRenders[state.id];
@@ -177,26 +179,31 @@ class MapboxSingleTile extends Evented {
     state && this._cancelRender(state);
   }
 
-  renderTile(z, x, y, next){
+  renderTile(z, x, y, ctx, drawImageSpec, next){
+    var callback = {
+      func: next,
+      ctx: ctx,
+      drawImageSpec: drawImageSpec
+    };
     var coord = new TileCoord(z, x, y, 0);    
     var id = coord.id;
     var state = this._pendingRenders[id];
     if(state){
-      state.callbacks.push(next);
+      state.callbacks.push(callback);
       return state.renderId;
     }
 
     var renderId = ++this._nextRenderId;
     state = this._pendingRenders[id] = {
       id: id,
-      callbacks: [next],
+      callbacks: [callback],
       tile: new Tile(coord.wrapped(), this._resolution, z),
       coord: coord,
       renderId: renderId,
       timeout: setTimeout(() => {
         delete this._pendingRenders[coord.id];
         while(state.callbacks.length){
-          state.callbacks.shift()("timeout");
+          state.callbacks.shift().func("timeout");
         }
       }, TILE_LOAD_TIMEOUT)
     };   
@@ -222,7 +229,14 @@ class MapboxSingleTile extends Evented {
       }
 
       while(state.callbacks.length){
-        state.callbacks.shift()(err, !err && this._canvas);
+        var cb = state.callbacks.shift();
+        !err && cb.ctx && cb.ctx.drawImage(
+          this._canvas,
+          cb.drawImageSpec.srcLeft, cb.drawImageSpec.srcTop, 
+          cb.drawImageSpec.srcSize, cb.drawImageSpec.srcSize, 
+          cb.drawImageSpec.destLeft, cb.drawImageSpec.destTop,
+          cb.drawImageSpec.destSize, cb.drawImageSpec.destSize);
+        cb.func(err);
       }
 
       clearTimeout(state.timeout);

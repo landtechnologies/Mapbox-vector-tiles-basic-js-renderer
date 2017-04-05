@@ -13,10 +13,9 @@
   The width (=height) of the tile rendered is set using the .setResolution method.
   The style for each layer is set as the "style" field passed in the options
   object to the constructor, but it can be overriden using the .setPaintProperty
-  method.  IMPORTANT: the resolution and style used for rendering is read at the 
-  point the render is actually performed, not at the point it is requested (
-  the render is performed in an async manner, remember). Hopefully this meets 
-  the requirements of the user.
+  method. The filter for a given layer is set with .setFilter.
+  Whenever any of these methods is called, all pending renders are aborted, so you
+  must re-issue them if you still want them.
 
   ==========================================
   Notes on development:
@@ -40,8 +39,7 @@ const Painter = require('./render/painter'),
       EXTENT = require('./data/extent'),
       Evented = require('./util/evented'),
       TileCoord = require('./source/tile_coord'),
-      mat4 = require('@mapbox/gl-matrix').mat4,
-      Cache = require('./util/lru_cache');
+      mat4 = require('@mapbox/gl-matrix').mat4;
 
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
@@ -103,12 +101,14 @@ class MapboxSingleTile extends Evented {
 
   setPaintProperty(layer, prop, val){
     this._style.setPaintProperty(layer, prop, val);
+    this._cancelAllPending(false);
     this._style.update([], {transition: false});
   }
 
   setFilter(layer, filter){
     // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
     this._style.setFilter(layer, filter);
+    this._cancelAllPending(false);
     this._style.update([], {transition: false});
   }
 
@@ -124,12 +124,21 @@ class MapboxSingleTile extends Evented {
     this.transform.pixelsToGLUnits = [2 / r, -2 / r];
     this.painter.resize(r, r); 
     this._resolution = r;
+    this._cancelAllPending(false);
+  }
+
+  _cancelAllPending(abortFetch){
+    // TODO: handle abortFetch=true
+    for(var id in this._pendingRenders){
+      clearTimeout(this._pendingRenders[id].timeout);
+    }
+    this._pendingRenders = {};
   }
 
   _renderTileDataFetchFailed(e){
     var state = this._pendingRenders[e.tile.coord.id];
     if(!state){
-      return; // timeout already occured
+      return; // timeout already occured, or canceled
     }
     delete this._pendingRenders[e.tile.coord.id];
     clearTimeout(state.timeout);
@@ -144,7 +153,7 @@ class MapboxSingleTile extends Evented {
   _renderTileNowDataIsAvailable(e){
     var state = this._pendingRenders[e.coord.id];
     if(!state){
-      return; // timeout already occured
+      return; // timeout already occured, or canceled
     } else if(--state.awaitingSources > 0){
       return;
     } else {
@@ -171,9 +180,12 @@ class MapboxSingleTile extends Evented {
 
   }
   
+  cancelRender(){
+    // TODO: implement, may want to accept an id or something.
+  }
 
   renderTile(z, x, y, next){
-    // see note at top of file for explanaiton of the 4 "states" a tile can be in   
+    // see note at top of file for explanaiton of the 3 "states" a tile can be in   
     var coord = new TileCoord(z, x, y, 0);    
     
     // Deal with state (2).

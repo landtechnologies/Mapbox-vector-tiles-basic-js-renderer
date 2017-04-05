@@ -27,12 +27,7 @@
          have the raw files in its cache, so this may not require making a roundtrip
          to the server, but that optimization is transparent to us).
       2. Recently requested, but not ready yet (i.e. in _pendingRenders)
-      3. Recently rendered, with resulting image cached for the correct options.
-      4. Previously requested, but image not cached (with correct options).  However
-        data is still available, so no need to wait for data before rendering.
-
-  The property _renderedTileCache is a Least-Recently-Used cache that maps from
-  <coord.id + JSON.stringify(options)> to single canvases.
+      3. Previously requested, with data still available, so no need to wait before rendering.
 
   The property _pendingRenders maps from <coord.id> to an object that contains callbacks.
   Note this is not a cache: things are removed from the _pendingRenders when the rendering
@@ -49,7 +44,6 @@ const Painter = require('./render/painter'),
       Cache = require('./util/lru_cache');
 
 const DEFAULT_RESOLUTION = 256;
-const DEFAULT_CACHE_SIZE = 6;
 const TILE_LOAD_TIMEOUT = 60000;
 
 class MapboxSingleTile extends Evented {
@@ -69,9 +63,7 @@ class MapboxSingleTile extends Evented {
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
     this.setResolution(DEFAULT_RESOLUTION);
-    this._styleOverrides = {};
     this._pendingRenders = {};
-    (options.cacheSize !== 0) && (this._renderedTileCache = new Cache(options.cacheSize || DEFAULT_CACHE_SIZE, ()=>{}));
   }
 
   _initSourceCache(){
@@ -110,16 +102,14 @@ class MapboxSingleTile extends Evented {
   }
 
   setPaintProperty(layer, prop, val){
-    if(val === undefined || val === null){
-      throw "reseting style not implemented";
-    } 
-    this._styleOverrides[layer + "." + prop] = val;
     this._style.setPaintProperty(layer, prop, val);
     this._style.update([], {transition: false});
   }
 
-  _getCurrentVariantString(){
-    return this._resolution + "|" + JSON.stringify(this._styleOverrides);
+  setFilter(layer, filter){
+    // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
+    this._style.setFilter(layer, filter);
+    this._style.update([], {transition: false});
   }
 
   setResolution(r){
@@ -172,25 +162,11 @@ class MapboxSingleTile extends Evented {
       showOverdrawInspector: this._initOptions.showOverdrawInspector
     });
     
-    // copy the canvas into cache (if required)
-    var returnCanvas;
-    if(this._renderedTileCache){
-      returnCanvas = document.createElement('canvas');
-      returnCanvas.width = this._resolution;
-      returnCanvas.height = this._resolution;
-      console.time("drawImage " + e.coord.id + this._getCurrentVariantString());
-      returnCanvas.getContext('2d').drawImage(this._canvas, 0, 0);
-      console.timeEnd("drawImage " + e.coord.id + this._getCurrentVariantString());
-      this._renderedTileCache.add(e.coord.id + this._getCurrentVariantString(), returnCanvas);        
-    } else {
-      returnCanvas = this._canvas
-    }
-
-    // return a reference to the cached/main canvas
+    // return a reference to the main canvas
     // note that recipient must make use of it immediately,
     // i.e. by calling drawImage to a new canvas.
     while(state.callbacks.length){
-      state.callbacks.shift()(null, returnCanvas);
+      state.callbacks.shift()(null, this._canvas);
     }
 
   }
@@ -200,12 +176,6 @@ class MapboxSingleTile extends Evented {
     // see note at top of file for explanaiton of the 4 "states" a tile can be in   
     var coord = new TileCoord(z, x, y, 0);    
     
-    // Deal with state (3).
-    var cached = this._renderedTileCache && this._renderedTileCache.get(coord.id +  this._getCurrentVariantString());
-    if(cached){
-      return next(null, cached);
-    }
-
     // Deal with state (2).
     if(this._pendingRenders[coord.id]){
       this._pendingRenders[coord.id].callbacks.push(next);
@@ -220,7 +190,7 @@ class MapboxSingleTile extends Evented {
     };   
  
     if(state.awaitingSources == 0){
-      // Deal with state (4).
+      // Deal with state (3).
       setTimeout(() => this._renderTileNowDataIsAvailable({coord: coord, tile: tile}), 1);
 
     } else {

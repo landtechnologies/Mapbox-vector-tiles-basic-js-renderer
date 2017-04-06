@@ -28,6 +28,13 @@
   ==========================================
   Notes on development:
 
+  As noted above, the "resolution" value states the width (equal to height) of 
+  the rendered tile.  However, for really large values we dont render the whole
+  thing in one go, instead we render sections of the tile one by one, and carefully
+  interpret the drawImageSpec to ensure that the whole image is constructed as
+  expected by the caller.  The canvas size being used is held in this._canvasSize,
+  as comared to the resolution which is this._resolution.
+
   The property _pendingRenders maps from <coord.id> to an object that 
   contains of the form {tile, renderId, callbacks: [], ...}.
   Note this is not a cache: things are removed from the _pendingRenders 
@@ -44,10 +51,13 @@
 
   Caching: the browser will cache the raw protobuf files for a few hours 
   (as we set the cache header on our server to let this happen). 
+
   Suggestion: In addition to the above, we might want to implement a 
   cache of "deserialsed" tiles (the terminology used by mapbox)...this should 
-  make it a bit (?) faster to  render tiles at different zoom levels and/or 
-  with diffrent styles/filters. 
+  make it a bit (?) faster to  render tiles at different resolutions and/or 
+  with diffrent styles/filters.  In fact, when changing resolution there is
+  no need to do any work prior to the GPU-render, so it would definitely help
+  having the tiles cached in that case.
 
 */
 
@@ -63,6 +73,7 @@ const Painter = require('./render/painter'),
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
 const TILE_CACHE_SIZE = 100;
+const MAX_RENDER_SIZE = 1024; // for higher resolutions, we render in sections
 
 class Style2 extends Style {
   constructor(stylesheet, map, options){
@@ -90,7 +101,6 @@ class MapboxSingleTile extends Evented {
     super();
     this._initOptions = options = options || {}; 
     this.transform = {zoom: 0, angle: 0, pitch: 0, scaleZoom: ()=> 0};
-    this._posMatrix = this._calculatePosMatrix(); // doesn't depend on anything!
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
@@ -107,12 +117,18 @@ class MapboxSingleTile extends Evented {
     return this._style._source;
   }
 
-  _calculatePosMatrix() {
-    const posMatrix = mat4.identity(new Float64Array(16));
-    const halfExtent = EXTENT/2;
-    mat4.scale(posMatrix, posMatrix, [1/halfExtent, -1/halfExtent, 1]);
-    mat4.translate(posMatrix, posMatrix, [-halfExtent, -halfExtent, 0]);
-    return new Float32Array(posMatrix);
+  _calculatePosMatrix(transX, transY) {
+    this._tmpMat4f64 = this._tmpMat4f64 || new Float64Array(16); // reuse each time for GC's benefit
+    this._tmpMat4f32 = this._tmpMat4f32 || new Float32Array(16);
+    const factor = this._resolution/this._canvasSize;
+    mat4.identity(this._tmpMat4f64);
+    mat4.scale(this._tmpMat4f64, this._tmpMat4f64, [factor * 2/EXTENT, -factor * 2/EXTENT, 1]);
+    mat4.translate(this._tmpMat4f64, this._tmpMat4f64, 
+      [-EXTENT/factor/2 - EXTENT*transX/this._resolution,
+       -EXTENT/factor/2 - EXTENT*transY/this._resolution, 
+       0]);
+    this._tmpMat4f32.set(this._tmpMat4f64);
+    return this._tmpMat4f32;
   }
 
   _createGlContext(){
@@ -144,16 +160,15 @@ class MapboxSingleTile extends Evented {
   }
 
   setResolution(r){
-    // resolution at which the tile is rendered,
     if(r == this._resolution){
       return;
     }
-    this._size = r;
-    this._canvas.width = r;
-    this._canvas.height = r;
-    this.transform.pixelsToGLUnits = [2 / r, -2 / r];
-    this.painter.resize(r, r); 
     this._resolution = r;
+    this._canvasSize = Math.min(r, MAX_RENDER_SIZE);
+    this._canvas.width = this._canvasSize;
+    this._canvas.height = this._canvasSize;
+    this.transform.pixelsToGLUnits = [2 / this._canvasSize, -2 / this._canvasSize];
+    this.painter.resize(this._canvasSize, this._canvasSize); 
     this._cancelAllPending(false);
   }
 
@@ -217,26 +232,42 @@ class MapboxSingleTile extends Evented {
       if(!err){
         this.transform.zoom = z;
         state.tile.tileSize = this._resolution;
-        state.coord.posMatrix = this._posMatrix;
         this._style._currentCoord = state.coord;
         this._style._currentTile = state.tile;
-        this.painter.render(this._style, {
-          showTileBoundaries: this._initOptions.showTileBoundaries,
-          showOverdrawInspector: this._initOptions.showOverdrawInspector
-        });
+
+        for(var xx=0; xx<this._resolution; xx+= this._canvasSize){
+          for(var yy=0; yy<this._resolution; yy+=this._canvasSize){
+            var relevantCallbacks = state.callbacks.filter(cb =>
+              cb.drawImageSpec.srcLeft >= xx &&
+              cb.drawImageSpec.srcLeft < xx + this._canvasSize &&
+              cb.drawImageSpec.srcTop >= yy && 
+              cb.drawImageSpec.srcTop < yy + this._canvasSize);
+            if(relevantCallbacks.length === 0){
+              continue;
+            }
+
+            state.coord.posMatrix = this._calculatePosMatrix(xx, yy);
+            this.painter.render(this._style, {
+              showTileBoundaries: this._initOptions.showTileBoundaries,
+              showOverdrawInspector: this._initOptions.showOverdrawInspector
+            });
+
+            relevantCallbacks.forEach(cb =>
+              cb.ctx.drawImage(
+                this._canvas,
+                cb.drawImageSpec.srcLeft-xx, cb.drawImageSpec.srcTop-yy, 
+                cb.drawImageSpec.srcSize, cb.drawImageSpec.srcSize, 
+                cb.drawImageSpec.destLeft, cb.drawImageSpec.destTop,
+                cb.drawImageSpec.destSize, cb.drawImageSpec.destSize));
+          } // yy
+        } // xx
+        
         this._style._currentCoord = null;
         this._style._currentTile = null;
       }
 
       while(state.callbacks.length){
-        var cb = state.callbacks.shift();
-        !err && cb.ctx && cb.ctx.drawImage(
-          this._canvas,
-          cb.drawImageSpec.srcLeft, cb.drawImageSpec.srcTop, 
-          cb.drawImageSpec.srcSize, cb.drawImageSpec.srcSize, 
-          cb.drawImageSpec.destLeft, cb.drawImageSpec.destTop,
-          cb.drawImageSpec.destSize, cb.drawImageSpec.destSize);
-        cb.func(err);
+        state.callbacks.shift().func(err);
       }
 
       clearTimeout(state.timeout);

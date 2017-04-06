@@ -10,6 +10,11 @@
   be triggered immediately (sync) afterwards with an error/null passed.
   Errors include "timeout" and "cancel" among other things, and when an
   error is returned it means the image was not rendered and never will be.
+  IMPORTANT: the destination canvas must be greater than about 512x512 to
+  ensure chrome puts it on the gpu not the cpu...when left on the cpu the
+  drawImage call can take 100x longer, which is horrible. Note that the size
+  of the tile and the size of the visible part of the canvas is not relevant,
+  only the total size of the canvas.
 
   The renderTile function returns a renderId which can be passed
   to cancelRender. When canceled, any pending callbacks will be
@@ -185,6 +190,7 @@ class MapboxSingleTile extends Evented {
     }
     clearTimeout(state.timeout);
     delete this._pendingRenders[state.id];
+    this._source.abortTile(state.tile);
     this._source.unloadTile(state.tile);
   }
 

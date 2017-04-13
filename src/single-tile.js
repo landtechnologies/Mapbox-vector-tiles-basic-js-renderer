@@ -124,6 +124,7 @@ class MapboxSingleTile extends Evented {
     this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
     this._nextRenderId = 0;
     this._canvas = document.createElement('canvas');
+    this._canvas.style.imageRendering = 'pixelated';
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();

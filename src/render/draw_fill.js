@@ -48,7 +48,7 @@ function drawFillTiles(painter, sourceCache, layer, coords, drawFn) {
         const bucket = tile.getBucket(layer);
         if (!bucket) continue;
 
-        //painter.enableTileClippingMask(coord);
+        painter.enableTileClippingMask(coord);
         drawFn(painter, sourceCache, layer, tile, coord, bucket.buffers, firstTile);
         firstTile = false;
     }

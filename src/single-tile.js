@@ -100,6 +100,19 @@ class Style2 extends Style {
   }
 };
 
+class Painter2 extends Painter {
+  constructor(gl, transform){
+    super(gl, transform);
+  }
+  resize(width, height) {
+    const gl = this.gl;
+    this.width = width;
+    this.height = height;
+    gl.viewport(0, 0, this.width, this.height);
+  }
+  enableTileClippingMask(){ }
+};
+
 class MapboxSingleTile extends Evented {
 
   constructor(options) {
@@ -147,7 +160,7 @@ class MapboxSingleTile extends Evented {
     if (!this._gl) {
       throw new Error('Failed to initialize WebGL');
     }
-    this.painter = new Painter(this._gl, this.transform);
+    this.painter = new Painter2(this._gl, this.transform);
     this.painter.style = this._style;
   }
 

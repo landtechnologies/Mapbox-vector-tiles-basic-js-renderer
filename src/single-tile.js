@@ -16,8 +16,8 @@
   of the tile and the size of the visible part of the canvas is not relevant,
   only the total size of the canvas.
 
-  The renderTile function returns a renderId which can be passed
-  to cancelRender. When canceled, any pending callbacks will be
+  The renderTile function returns a renderRef which can be passed
+  to cancelRender. When canceled, if the callback is still pending it will be
   triggered with a "canceled" error, and then never again (guaranteed). It
   is also guarnteed that no image will be rendred to a context after it has
   been canceled.
@@ -194,10 +194,15 @@ class MapboxSingleTile extends Evented {
     this._source.unloadTile(state.tile);
   }
 
-  cancelRender(renderId, state){
+  cancelRender(renderRef, state){
     var state = Object.values(this._pendingRenders)
-                      .find(state => state.renderId === renderId);
-    state && this._cancelRender(state);
+                      .find(state => state.renderId === renderRef.id);
+    if(!state){
+      return;
+    }
+    var idx = state.callbacks.indexOf(renderRef.callback);
+    (idx !== -1) && state.callbacks.splice(idx,1);
+    (state.callbacks.length === 0) && this._cancelRender(state);
   }
 
   renderTile(z, x, y, ctx, drawImageSpec, next){
@@ -211,7 +216,7 @@ class MapboxSingleTile extends Evented {
     var state = this._pendingRenders[id];
     if(state){
       state.callbacks.push(callback);
-      return state.renderId;
+      return {id: state.renderId, callback: callback};
     }
 
     var renderId = ++this._nextRenderId;
@@ -282,7 +287,7 @@ class MapboxSingleTile extends Evented {
       
     });
 
-    return state.renderId;
+    return {id: state.renderId, callback: callback};
   }
 
   showCanvasForDebug(){

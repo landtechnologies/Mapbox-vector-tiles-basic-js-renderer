@@ -23,7 +23,7 @@
   been canceled.
 
   The initial style for the render is set in {style:} passed to the constructor.
-  However there are several methods for chaning the render options.  Whenever 
+  However there are several methods for changing the render options.  Whenever 
   any one of these is set, all pending renders are canceled (with the "canceled"
   error sent to pending callbacks)....
     - setResolution(r) sets the width (equal to height) of the rendered tile
@@ -38,10 +38,10 @@
   thing in one go, instead we render sections of the tile one by one, and carefully
   interpret the drawImageSpec to ensure that the whole image is constructed as
   expected by the caller.  The canvas size being used is held in this._canvasSize,
-  as comared to the resolution which is this._resolution.
+  as compared to the resolution which is this._resolution.
 
-  The property _pendingRenders maps from <coord.id> to an object that 
-  contains of the form {tile, renderId, callbacks: [], ...}.
+  The property _pendingRenders maps from <coord.id> to an object of the form:
+   {tile, renderId, callbacks: [], ...}.
   Note this is not a cache: things are removed from the _pendingRenders 
   when the rendering is completed, we also unload the tile from the worker.
 
@@ -83,7 +83,9 @@ const MAX_RENDER_SIZE = 1024; // for higher resolutions, we render in sections
 class Style2 extends Style {
   constructor(stylesheet, map, options){
     super(stylesheet, map, options);
+    this._callsPendingStyleLoad = [];
   }
+
   addSource(id, source, options){
     console.assert(!this._source, "can only load one source");
     this._source = Source.create(id, source, this.dispatcher, this);
@@ -97,6 +99,31 @@ class Style2 extends Style {
       reload: () => {},
       serialize: () => this._source.serialize()
     }; 
+    this.on('data', e => {
+      if(e.dataType !== "style"){
+        return;
+      }
+      while(this._callsPendingStyleLoad && this._callsPendingStyleLoad.length){
+        this._callsPendingStyleLoad.shift()();
+      }
+      this._callsPendingStyleLoad = null;
+    });
+  }
+
+  setPaintProperty(layer, prop, val){
+    if(this._callsPendingStyleLoad){
+      this._callsPendingStyleLoad.push(()=> super.setPaintProperty(layer, prop, val));      
+    } else {
+      super.setPaintProperty(layer, prop, val);
+    }
+  }
+
+  setFilter(layer, filter){
+    if(this._callsPendingStyleLoad){
+      this._callsPendingStyleLoad.push(()=> super.setFilter(layer, filter));      
+    } else {
+      super.setFilter(layer, filter);
+    }
   }
 };
 

@@ -54,6 +54,14 @@
   ensure that they are still wanted (rather than canceled or superceded for 
   the given tile).
 
+  To view the data in a tile, you can do something like:
+    // at the top of the file
+    var VectorTile = require('vector-tile').VectorTile;
+    var Protobuf = require('pbf');
+    // inside the laodTile callback:
+    console.log(new VectorTile(new Protobuf(state.tile.rawTileData)).layers); 
+
+
   Caching: the browser will cache the raw protobuf files for a few hours 
   (as we set the cache header on our server to let this happen). 
 
@@ -145,7 +153,7 @@ class MapboxSingleTile extends Evented {
   constructor(options) {
     super();
     this._initOptions = options = options || {}; 
-    this.transform = {zoom: 0, angle: 0, pitch: 0, scaleZoom: ()=> 0};
+    this.transform = {zoom: 0, angle: 0, pitch: 0, scaleZoom: ()=> 0, cameraToCenterDistance: 1};
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
@@ -334,7 +342,7 @@ class MapboxSingleTile extends Evented {
   showCanvasForDebug(){
     document.body.appendChild(this._canvas);
     this._canvas.style.position = "fixed";
-    this._canvas.style.top = "20px";
+    this._canvas.style.top = "200px";
     this._canvas.style.right = "20px";
     this._canvas.style.background = "#ccc";
     this._canvas.style.border = "1px solid red";

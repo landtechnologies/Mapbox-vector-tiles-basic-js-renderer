@@ -37,7 +37,7 @@
   the rendered tile.  However, for really large values we dont render the whole
   thing in one go, instead we render sections of the tile one by one, and carefully
   interpret the drawImageSpec to ensure that the whole image is constructed as
-  expected by the caller.  The canvas size being used is held in this._canvasSize,
+  expected by the caller.  The canvas size being used is held in this._canvasSizeFull,
   as compared to the resolution which is this._resolution.
 
   The property _pendingRenders maps from <coord.id> to an object of the form:
@@ -87,6 +87,7 @@ const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
 const TILE_CACHE_SIZE = 100;
 const MAX_RENDER_SIZE = 1024; // for higher resolutions, we render in sections
+const DEFAULT_BUFFER_ZONE_WIDTH = 0;
 
 class Style2 extends Style {
   constructor(stylesheet, map, options){
@@ -163,7 +164,7 @@ class MapboxSingleTile extends Evented {
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
-    this.setResolution(DEFAULT_RESOLUTION);
+    this.setResolution(DEFAULT_RESOLUTION, DEFAULT_BUFFER_ZONE_WIDTH);
     this._pendingRenders = {}; // coord.id => render state
   }
 
@@ -171,16 +172,43 @@ class MapboxSingleTile extends Evented {
     return this._style._source;
   }
 
-  _calculatePosMatrix(transX, transY) {
+  _calculatePosMatrix(transX, transY) {   
+    /*
+      The returned matrix, M, is designed to be used as:
+        X_gl_coords = M * X_mvt_data_coords
+      where X_gl_coords are in the range [-1,1]
+      and X_mvt_data_coords are in the range [0,Extent], or rather they are nearly 
+      within that range, they actually go outside it by about 10% to let polygons/lines
+      span across tile boundaries.
+      The translate/scale functions her could probably be ditched in favour of
+      the mat4 versions, but I found it easier to do the multiplies myself.
+    */
+    var translate = (a, v) => {
+      this._tmpMat4f64b = this._tmpMat4f64b || new Float32Array(16);
+      mat4.identity(this._tmpMat4f64b);
+      mat4.translate(this._tmpMat4f64b, this._tmpMat4f64b,v);
+      mat4.multiply(a,this._tmpMat4f64b,a);
+    }
+    var scale = (a, v) => {
+      this._tmpMat4f64b = this._tmpMat4f64b || new Float32Array(16);
+      mat4.identity(this._tmpMat4f64b);
+      mat4.scale(this._tmpMat4f64b, this._tmpMat4f64b,v);
+      mat4.multiply(a,this._tmpMat4f64b,a);
+    }
+
     this._tmpMat4f64 = this._tmpMat4f64 || new Float64Array(16); // reuse each time for GC's benefit
     this._tmpMat4f32 = this._tmpMat4f32 || new Float32Array(16);
-    const factor = this._resolution/this._canvasSize;
+
+    const factor = (this._resolution/this._canvasSizeInner) // this bit is 1 for further-zoomed out rendering
+                   *(this._canvasSizeInner/this._canvasSizeFull);
+    const b = this._bufferZoneWidth/this._canvasSizeFull*2;
+
+    // The main calculation...
     mat4.identity(this._tmpMat4f64);
-    mat4.scale(this._tmpMat4f64, this._tmpMat4f64, [factor * 2/EXTENT, -factor * 2/EXTENT, 1]);
-    mat4.translate(this._tmpMat4f64, this._tmpMat4f64, 
-      [-EXTENT/factor/2 - EXTENT*transX/this._resolution,
-       -EXTENT/factor/2 - EXTENT*transY/this._resolution, 
-       0]);
+    translate(this._tmpMat4f64, [-EXTENT*transX/this._resolution, -EXTENT*transY/this._resolution,0]);
+    scale(this._tmpMat4f64,[2/EXTENT*factor, -2/EXTENT*factor, 1]);
+    translate(this._tmpMat4f64, [-1+b, 1-b, 0]);
+
     this._tmpMat4f32.set(this._tmpMat4f64);
     return this._tmpMat4f32;
   }
@@ -213,17 +241,25 @@ class MapboxSingleTile extends Evented {
     this._style.update([], {transition: false});
   }
 
-  setResolution(r){
-    if(r == this._resolution){
+  setResolution(r, bufferZoneWidth){
+    bufferZoneWidth = bufferZoneWidth || 0;
+    if(r === this._resolution && this._bufferZoneWidth === bufferZoneWidth){
       return;
     }
     this._resolution = r;
-    this._canvasSize = Math.min(r, MAX_RENDER_SIZE);
-    this._canvas.width = this._canvasSize;
-    this._canvas.height = this._canvasSize;
-    this.transform.pixelsToGLUnits = [2 / this._canvasSize, -2 / this._canvasSize];
-    this.painter.resize(this._canvasSize, this._canvasSize); 
+    this._bufferZoneWidth = bufferZoneWidth;
+    this._canvasSizeFull = Math.min(r + 2*bufferZoneWidth, MAX_RENDER_SIZE);
+    this._canvasSizeInner = this._canvasSizeFull - 2*bufferZoneWidth;
+    this._canvas.width = this._canvasSizeFull;
+    this._canvas.height = this._canvasSizeFull;
+    this.transform.pixelsToGLUnits = [2 / this._canvasSizeFull, -2 / this._canvasSizeFull];
+    this.painter.resize(this._canvasSizeFull, this._canvasSizeFull); 
     this._cancelAllPending(false);
+
+    if(this._debugBufferEl){
+      this._debugBufferEl.style.width = this._canvasSizeFull + 'px';
+      this._debugBufferEl.style.height = this._canvasSizeFull + 'px';
+    } 
   }
 
   _cancelAllPending(){
@@ -288,20 +324,18 @@ class MapboxSingleTile extends Evented {
       if(!state || state.renderId !== renderId){
         return; // render for this tile has been canceled, or superceded.
       }
-
       if(!err){
         this.transform.zoom = z;
         state.tile.tileSize = this._resolution;
         this._style._currentCoord = state.coord;
         this._style._currentTile = state.tile;
-
-        for(var xx=0; xx<this._resolution; xx+= this._canvasSize){
-          for(var yy=0; yy<this._resolution; yy+=this._canvasSize){
+        for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
+          for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
             var relevantCallbacks = state.callbacks.filter(cb =>
-              cb.drawImageSpec.srcLeft >= xx &&
-              cb.drawImageSpec.srcLeft < xx + this._canvasSize &&
-              cb.drawImageSpec.srcTop >= yy && 
-              cb.drawImageSpec.srcTop < yy + this._canvasSize);
+              cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcSize > xx &&
+              cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
+              cb.drawImageSpec.srcTop + cb.drawImageSpec.srcSize > yy && 
+              cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
             if(relevantCallbacks.length === 0){
               continue;
             }
@@ -312,13 +346,16 @@ class MapboxSingleTile extends Evented {
               showOverdrawInspector: this._initOptions.showOverdrawInspector
             });
 
-            relevantCallbacks.forEach(cb =>
-              cb.ctx.drawImage(
-                this._canvas,
-                cb.drawImageSpec.srcLeft-xx, cb.drawImageSpec.srcTop-yy, 
-                cb.drawImageSpec.srcSize, cb.drawImageSpec.srcSize, 
-                cb.drawImageSpec.destLeft, cb.drawImageSpec.destTop,
-                cb.drawImageSpec.destSize, cb.drawImageSpec.destSize));
+            relevantCallbacks.forEach(cb => {
+                let srcW = Math.min(cb.drawImageSpec.srcSize, this._canvasSizeInner - (cb.drawImageSpec.srcLeft-xx));
+                cb.ctx.drawImage(
+                  this._canvas,
+                  cb.drawImageSpec.srcLeft-xx+this._bufferZoneWidth, 
+                  cb.drawImageSpec.srcTop-yy+this._bufferZoneWidth, 
+                  srcW, cb.drawImageSpec.srcSize, 
+                  cb.drawImageSpec.destLeft, cb.drawImageSpec.destTop,
+                  srcW * cb.drawImageSpec.destSize/cb.drawImageSpec.srcSize, cb.drawImageSpec.destSize);
+            });
           } // yy
         } // xx
         
@@ -342,10 +379,15 @@ class MapboxSingleTile extends Evented {
   showCanvasForDebug(){
     document.body.appendChild(this._canvas);
     this._canvas.style.position = "fixed";
-    this._canvas.style.top = "200px";
+    this._canvas.style.top = "250px";
     this._canvas.style.right = "20px";
     this._canvas.style.background = "#ccc";
-    this._canvas.style.border = "1px solid red";
+    var buffer = this._debugBufferEl = document.createElement('div');
+    buffer.style.position = "fixed";
+    buffer.style.top = "250px";
+    buffer.style.right = "20px";
+    buffer.style.border = '45px solid rgba(255,0,0,0.2)';
+    document.body.appendChild(buffer);
   }
 
 }

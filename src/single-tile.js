@@ -22,11 +22,18 @@
   is also guarnteed that no image will be rendred to a context after it has
   been canceled.
 
+  The drawImageSpec passed to renderTile uses pixel coordinates as implied by
+  the resolution value set with setResolution. Note that if you have requested
+  a buffer region (aka 'frame') around the rendered tile you can specify negative
+  values as well as values outside the tile bounds - this will mean the buffer region
+  is used in the drawImage call.
+
   The initial style for the render is set in {style:} passed to the constructor.
   However there are several methods for changing the render options.  Whenever 
   any one of these is set, all pending renders are canceled (with the "canceled"
   error sent to pending callbacks)....
-    - setResolution(r) sets the width (equal to height) of the rendered tile
+    - setResolution(r, bufferSize) sets the width (equal to height) of the rendered tile
+      to be r pixels, and specifies the width of the buffer (aka 'frame') in pixels.
     - setPaintProperty(layer, property, value) - see mapbox map's method of the same name
     - setFilter(layer, filter) - see mapbox map's method of the same name
 
@@ -38,7 +45,8 @@
   thing in one go, instead we render sections of the tile one by one, and carefully
   interpret the drawImageSpec to ensure that the whole image is constructed as
   expected by the caller.  The canvas size being used is held in this._canvasSizeFull,
-  as compared to the resolution which is this._resolution.
+  as compared to the resolution which is this._resolution.  And when we have a buffer region,
+  note that this._canvasSizeFull = this._canvasSizeInner + 2*this._bufferZoneWidth.
 
   The property _pendingRenders maps from <coord.id> to an object of the form:
    {tile, renderId, callbacks: [], ...}.
@@ -180,7 +188,7 @@ class MapboxSingleTile extends Evented {
       and X_mvt_data_coords are in the range [0,Extent], or rather they are nearly 
       within that range, they actually go outside it by about 10% to let polygons/lines
       span across tile boundaries.
-      The translate/scale functions her could probably be ditched in favour of
+      The translate/scale functions here could probably be ditched in favour of
       the mat4 versions, but I found it easier to do the multiplies myself.
     */
     var translate = (a, v) => {
@@ -346,15 +354,24 @@ class MapboxSingleTile extends Evented {
               showOverdrawInspector: this._initOptions.showOverdrawInspector
             });
 
+            let validW = Math.min(this._canvasSizeInner, this._resolution - xx);
+            let validH = Math.min(this._canvasSizeInner, this._resolution - yy);
             relevantCallbacks.forEach(cb => {
-                let srcW = Math.min(cb.drawImageSpec.srcSize, this._canvasSizeInner - (cb.drawImageSpec.srcLeft-xx));
+                let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft - xx);
+                let srcTop = Math.max(0, cb.drawImageSpec.srcTop - yy);
+                let destLeftOff = Math.max(0, xx-cb.drawImageSpec.srcLeft);
+                let destTopOff = Math.max(0, yy-cb.drawImageSpec.srcTop); 
+                let srcW = Math.min(cb.drawImageSpec.srcSize - destLeftOff, validW - srcLeft);
+                let srcH = Math.min(cb.drawImageSpec.srcSize - destTopOff, validH - srcTop);
+                // let scale = cb.drawImageSpec.destSize/cb.drawImageSpec.srcSize;
                 cb.ctx.drawImage(
                   this._canvas,
-                  cb.drawImageSpec.srcLeft-xx+this._bufferZoneWidth, 
-                  cb.drawImageSpec.srcTop-yy+this._bufferZoneWidth, 
-                  srcW, cb.drawImageSpec.srcSize, 
-                  cb.drawImageSpec.destLeft, cb.drawImageSpec.destTop,
-                  srcW * cb.drawImageSpec.destSize/cb.drawImageSpec.srcSize, cb.drawImageSpec.destSize);
+                  this._bufferZoneWidth + srcLeft, 
+                  this._bufferZoneWidth + srcTop, 
+                  srcW, srcH, 
+                  cb.drawImageSpec.destLeft + destLeftOff,
+                  cb.drawImageSpec.destTop + destTopOff,
+                  srcW, srcH);
             });
           } // yy
         } // xx

@@ -3,8 +3,8 @@
 
   Aside from the constructor, it provides one main method:
     renderTile(z, x, y, canvas2dContext, drawImageSpec, callback)
-  where drawImageSpec needs to have the 2x3=6 properties of the form:
-     [src|dest][size|top|left]
+  where drawImageSpec needs to have the 2x2+2=6 properties of the form:
+     [src|dest][top|left]  |  src[width|height]
   If the render is successful the image will be draw onto the specified
   context using the specified drawImageSpec, and then the callback will
   be triggered immediately (sync) afterwards with an error/null passed.
@@ -340,9 +340,9 @@ class MapboxSingleTile extends Evented {
         for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
           for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
             var relevantCallbacks = state.callbacks.filter(cb =>
-              cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcSize > xx &&
+              cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > xx &&
               cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
-              cb.drawImageSpec.srcTop + cb.drawImageSpec.srcSize > yy && 
+              cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > yy && 
               cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
             if(relevantCallbacks.length === 0){
               continue;
@@ -354,24 +354,21 @@ class MapboxSingleTile extends Evented {
               showOverdrawInspector: this._initOptions.showOverdrawInspector
             });
 
-            let validW = Math.min(this._canvasSizeInner, this._resolution - xx);
-            let validH = Math.min(this._canvasSizeInner, this._resolution - yy);
             relevantCallbacks.forEach(cb => {
-                let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft - xx);
-                let srcTop = Math.max(0, cb.drawImageSpec.srcTop - yy);
-                let destLeftOff = Math.max(0, xx-cb.drawImageSpec.srcLeft);
-                let destTopOff = Math.max(0, yy-cb.drawImageSpec.srcTop); 
-                let srcW = Math.min(cb.drawImageSpec.srcSize - destLeftOff, validW - srcLeft);
-                let srcH = Math.min(cb.drawImageSpec.srcSize - destTopOff, validH - srcTop);
-                // let scale = cb.drawImageSpec.destSize/cb.drawImageSpec.srcSize;
+                // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeFull]
+                let srcLeft = Math.max(0, this._bufferZoneWidth + cb.drawImageSpec.srcLeft - xx);
+                let srcTop = Math.max(0, this._bufferZoneWidth + cb.drawImageSpec.srcTop - yy);
+                let srcRight = Math.min(this._canvasSizeFull,
+                  this._bufferZoneWidth + cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - xx);
+                let srcBottom = Math.min(this._canvasSizeFull,
+                  this._bufferZoneWidth + cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - yy);
                 cb.ctx.drawImage(
                   this._canvas,
-                  this._bufferZoneWidth + srcLeft, 
-                  this._bufferZoneWidth + srcTop, 
-                  srcW, srcH, 
-                  cb.drawImageSpec.destLeft + destLeftOff,
-                  cb.drawImageSpec.destTop + destTopOff,
-                  srcW, srcH);
+                  srcLeft, srcTop, 
+                  srcRight - srcLeft, srcBottom - srcTop, 
+                  cb.drawImageSpec.destLeft + ((cb.drawImageSpec.srcLeft > 0) && Math.max(0, xx-cb.drawImageSpec.srcLeft))|0,
+                  cb.drawImageSpec.destTop + ((cb.drawImageSpec.srcTop > 0) && Math.max(0, yy-cb.drawImageSpec.srcTop))|0,
+                  srcRight - srcLeft, srcBottom - srcTop);
             });
           } // yy
         } // xx

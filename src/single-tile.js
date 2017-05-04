@@ -249,6 +249,15 @@ class MapboxSingleTile extends Evented {
     this._style.update([], {transition: false});
   }
 
+  // takes an array of layer names to show
+  setLayers(visibleLayers){
+    this._cancelAllPending(false);
+    Object.keys(this._style._layers).forEach(layerName => 
+      this._style.setLayoutProperty(layerName, 'visibility', visibleLayers.indexOf(layerName) > -1 ? 'visible' : 'none'));
+    this._style.update([], {transition: false});
+    console.log(visibleLayers);
+  }
+
   setResolution(r, bufferZoneWidth){
     bufferZoneWidth = bufferZoneWidth || 0;
     if(r === this._resolution && this._bufferZoneWidth === bufferZoneWidth){

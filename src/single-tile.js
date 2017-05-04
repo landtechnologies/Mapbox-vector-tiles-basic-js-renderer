@@ -375,8 +375,8 @@ class MapboxSingleTile extends Evented {
                   this._canvas,
                   srcLeft, srcTop, 
                   srcRight - srcLeft, srcBottom - srcTop, 
-                  cb.drawImageSpec.destLeft + ((cb.drawImageSpec.srcLeft > 0) && Math.max(0, xx-cb.drawImageSpec.srcLeft))|0,
-                  cb.drawImageSpec.destTop + ((cb.drawImageSpec.srcTop > 0) && Math.max(0, yy-cb.drawImageSpec.srcTop))|0,
+                  cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft - this._bufferZoneWidth)) |0,
+                  cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop - this._bufferZoneWidth))|0,
                   srcRight - srcLeft, srcBottom - srcTop);
             });
           } // yy

@@ -264,6 +264,11 @@ class MapboxSingleTile extends Evented {
     this._style.update([], {transition: false});
   }
 
+  getZoomRangeForLayer(layer){
+    layer = this._style._layers[layer];
+    return layer && [layer.minzoom, layer.maxzoom];
+  }
+
   setResolution(r, bufferZoneWidth){
     bufferZoneWidth = bufferZoneWidth || 0;
     if(r === this._resolution && this._bufferZoneWidth === bufferZoneWidth){

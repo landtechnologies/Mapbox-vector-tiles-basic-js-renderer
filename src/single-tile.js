@@ -121,6 +121,7 @@ class Style2 extends Style {
       if(e.dataType !== "style"){
         return;
       }
+      this._recalculate(16); // TODO: use proper zoom value (which depends on z at the point we actually render)
       while(this._callsPendingStyleLoad && this._callsPendingStyleLoad.length){
         this._callsPendingStyleLoad.shift()();
       }
@@ -261,7 +262,6 @@ class MapboxSingleTile extends Evented {
     Object.keys(this._style._layers).forEach(layerName => 
       this._style.setLayoutProperty(layerName, 'visibility', visibleLayers.indexOf(layerName) > -1 ? 'visible' : 'none'));
     this._style.update([], {transition: false});
-    console.log(visibleLayers);
   }
 
   setResolution(r, bufferZoneWidth){

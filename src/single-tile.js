@@ -98,7 +98,7 @@ const TILE_CACHE_SIZE = 100;
 const MAX_RENDER_SIZE = 1024; // for higher resolutions, we render in sections
 const DEFAULT_BUFFER_ZONE_WIDTH = 0;
 
-var layerStylesheetFromLayer = layer => layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
+var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
 
 class Style2 extends Style {
   constructor(stylesheet, map, options){
@@ -273,6 +273,21 @@ class MapboxSingleTile extends Evented {
     Object.keys(this._style._layers).forEach(layerName => 
       this._style.setLayoutProperty(layerName, 'visibility', visibleLayers.indexOf(layerName) > -1 ? 'visible' : 'none'));
     this._style.update([], {transition: false});
+  }
+
+  getSuggestedBufferWidth(){
+    let visibleLayerTypes =
+       Object.keys(this._style._layers)
+       .filter(lyr=>this._style.getLayoutProperty(lyr, 'visibility') === 'visible')
+       .map(lyr=>this._style._layers[lyr].type);
+    if(visibleLayerTypes.length > 1){
+      console.warn("combining multiple layer types is probably not a good idea.");
+    }
+    if(visibleLayerTypes.indexOf("circle") > -1 || visibleLayerTypes.indexOf("symbol") > -1){
+      return 30;
+    } else {
+      return 0;
+    }
   }
 
   getZoomRangeForLayer(layer){

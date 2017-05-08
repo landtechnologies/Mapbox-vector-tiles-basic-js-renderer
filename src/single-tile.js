@@ -89,13 +89,16 @@ const Painter = require('./render/painter'),
       TileCoord = require('./source/tile_coord'),
       mat4 = require('@mapbox/gl-matrix').mat4,
       Source = require('./source/source'),
-      Tile = require('./source/tile');
+      Tile = require('./source/tile'),
+      Point = require('point-geometry');
 
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
 const TILE_CACHE_SIZE = 100;
 const MAX_RENDER_SIZE = 1024; // for higher resolutions, we render in sections
 const DEFAULT_BUFFER_ZONE_WIDTH = 0;
+
+var layerStylesheetFromLayer = layer => layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
 
 class Style2 extends Style {
   constructor(stylesheet, map, options){
@@ -144,17 +147,25 @@ class Style2 extends Style {
       super.setFilter(layer, filter);
     }
   }
+
 };
 
 class Painter2 extends Painter {
   constructor(gl, transform){
     super(gl, transform);
+    this._filterForZoom = 15;
   }
   resize(width, height) {
     const gl = this.gl;
     this.width = width;
     this.height = height;
     gl.viewport(0, 0, this.width, this.height);
+  }
+  renderLayer(painter, sourceCache, layer, coords) {
+    let layerStylesheet = layerStylesheetFromLayer(layer);
+    if (layerStylesheet && layerStylesheet.minzoom_ && this._filterForZoom < layerStylesheet.minzoom_) return;
+    if (layerStylesheet && layerStylesheet.maxzoom_ && this._filterForZoom >= layerStylesheet.maxzoom_) return;
+    super.renderLayer(painter, sourceCache, layer, coords);
   }
   enableTileClippingMask(){ }
 };
@@ -265,8 +276,16 @@ class MapboxSingleTile extends Evented {
   }
 
   getZoomRangeForLayer(layer){
-    layer = this._style._layers[layer];
-    return layer && [layer.minzoom, layer.maxzoom];
+    let layerStylesheet = layerStylesheetFromLayer(this._style._layers[layer]);
+    return layerStylesheet && [layerStylesheet.minzoom_, layerStylesheet.maxzoom_];
+  }
+
+  filterForZoom(zoom){
+    if(zoom === this.painter._filterForZoom){
+      return;
+    }
+    this.painter._filterForZoom = zoom;
+    this._cancelAllPending(false);
   }
 
   setResolution(r, bufferZoneWidth){

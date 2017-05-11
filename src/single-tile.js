@@ -90,7 +90,11 @@ const Painter = require('./render/painter'),
       mat4 = require('@mapbox/gl-matrix').mat4,
       Source = require('./source/source'),
       Tile = require('./source/tile'),
-      Point = require('point-geometry');
+      Point = require('point-geometry'),
+      QueryFeatures = require('./source/query_features'),
+      SphericalMercator = require('@mapbox/sphericalmercator');
+
+var sphericalMercator = new SphericalMercator();
 
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
@@ -276,14 +280,15 @@ class MapboxSingleTile extends Evented {
   }
 
   getSuggestedBufferWidth(){
-    let visibleLayerTypes =
+    let visibleLayerTypes = 
        Object.keys(this._style._layers)
        .filter(lyr=>this._style.getLayoutProperty(lyr, 'visibility') === 'visible')
        .map(lyr=>this._style._layers[lyr].type);
-    if(visibleLayerTypes.length > 1){
+    visibleLayerTypes = new Set(visibleLayerTypes);
+    if(visibleLayerTypes.size > 1){
       console.warn("combining multiple layer types is probably not a good idea.");
     }
-    if(visibleLayerTypes.indexOf("circle") > -1 || visibleLayerTypes.indexOf("symbol") > -1){
+    if(visibleLayerTypes.has("circle") || visibleLayerTypes.has("symbol")){
       return 30;
     } else {
       return 0;
@@ -444,6 +449,60 @@ class MapboxSingleTile extends Evented {
     return {id: state.renderId, callback: callback};
   }
 
+
+  queryRenderedFeatures(opts){
+    // currently we only accept a point, but it would be easy to accept a box.
+
+    // convert from lat lng to...
+    // (a) the tile XY id, i.e. which (x,y,z) tile are we talking about?
+    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ).map(x=>x/256 /* why 256? */) 
+    // (b) the xy of the point within the relevant tile, expressed in [0,EXTENT] units.
+    let pointXY = tileXY.map(x => (x - (x|0)) * EXTENT);
+
+    // collect the coordinates of the tile containing the given point, plus any with an overlapping buffer region
+    let coords = []; 
+    let bufferSize = this._bufferZoneWidth/this._resolution * EXTENT; // measured in the same units as pointXY
+    let X = tileXY[0] | 0, Y = tileXY[1] | 0, Z = opts.tileZ;
+    coords.push(new TileCoord(Z, X, Y, 0));
+    // consider including the left, right, top, bottom adjacent tiles (if the point is near to the given edge)
+    (pointXY[0]<bufferSize)        && coords.push(new TileCoord(Z, X-1, Y, 0));
+    (pointXY[0]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X+1, Y, 0));
+    (pointXY[1]<bufferSize)        && coords.push(new TileCoord(Z, X, Y-1, 0));
+    (pointXY[1]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X, Y+1, 0));
+    // and consider including the 4 corner adjacent tiles (again, if the point is near the given corner)
+    (pointXY[0]<bufferSize && pointXY[1]<bufferSize)        && coords.push(new TileCoord(Z, X-1, Y-1, 0));
+    (pointXY[0]<bufferSize && pointXY[1]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X-1, Y+1, 0));
+    (pointXY[0]>EXTENT - bufferSize && pointXY[1]<bufferSize)        && coords.push(new TileCoord(Z, X+1, Y-1, 0));
+    (pointXY[0]>EXTENT - bufferSize && pointXY[1]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X+1, Y+1, 0));
+    
+    // prepare the fake tileCache (we will issue tile load requests in a moment)
+    let sourceCache = Object.create(this._style.sourceCaches.landinsight);
+    let tilesIn = coords.map(c => ({
+      tile: new Tile(c, this._resolution, opts.tileZ),
+      coord: c,
+      queryGeometry: [[Point.convert([
+        // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
+        pointXY[0] + EXTENT*(X-c.x),  
+        pointXY[1] + EXTENT*(Y-c.y),
+      ])]],
+      scale: 1
+    }));
+    sourceCache.tilesIn = () => tilesIn;
+    let nTilesPending = coords.length;
+    return new Promise((res, rej) => {     
+      tilesIn.forEach(t => this._source.loadTile(t.tile, err => {
+        if(--nTilesPending>0){
+          return;
+        }
+        res(QueryFeatures.rendered(
+          sourceCache,
+          this._style._layers, 
+          null /* query geometry is pre-specified in tilesIn */, 
+          {}, opts.tileZ, 0));
+      }));
+    });
+  }
+
   showCanvasForDebug(){
     document.body.appendChild(this._canvas);
     this._canvas.style.position = "fixed";
@@ -454,7 +513,7 @@ class MapboxSingleTile extends Evented {
     buffer.style.position = "fixed";
     buffer.style.top = "250px";
     buffer.style.right = "20px";
-    buffer.style.border = '45px solid rgba(255,0,0,0.2)';
+    buffer.style.border = '45px solid rgba(255,0,0,0.2)'; // TODO: use this._bufferZoneWidth properly
     document.body.appendChild(buffer);
   }
 

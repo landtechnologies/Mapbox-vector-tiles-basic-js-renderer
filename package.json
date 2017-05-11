@@ -14,6 +14,7 @@
   "dependencies": {
     "@mapbox/gl-matrix": "^0.0.1",
     "@mapbox/shelf-pack": "^3.0.0",
+    "@mapbox/sphericalmercator": "^1.0.5",
     "@mapbox/unitbezier": "^0.0.0",
     "@mapbox/whoots-js": "^3.0.0",
     "brfs": "^1.4.0",

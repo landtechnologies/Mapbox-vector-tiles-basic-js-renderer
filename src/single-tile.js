@@ -37,6 +37,23 @@
     - setPaintProperty(layer, property, value) - see mapbox map's method of the same name
     - setFilter(layer, filter) - see mapbox map's method of the same name
 
+  It is also possible to query for features at a given point:
+    queryRenderedFeatures({lng:, lat:, tileZ:, timeoutMS:})
+  This returns a promise* that resolves giving an array of mapbox features found to intersect
+  the given (lat,lng), note that tileZ is neede, because we only look at features within tiles
+  at a given zoom (this is similar to how you specify a single-tile for render, but here
+  we may need to consult multiple tiles...we use the same bufferSize concept as in rendering).
+  The querying uses the current styles and filters etc.  Note that this function does not
+  include per-tile timeouts and canceling (as with render). Hopefully in future it will be done
+  synchrounsly using an existing tileCache.  At the moment we just impose a basic crude overal
+  timeout, which rejects the promise (after 1second by default).
+
+  Note that we don't use the minZoom/maxZoom values in mapbox style (the range should at least 
+  cover the single-tile's zoom level), instead we use minZoom_ and maxZoom_ (i.e. with underscores).
+  This could potenitally be fixed, but was an easy fix for now.
+
+  * yes we are inconsistent with primises/callbacks, I know.
+
   ==========================================
   Notes on development:
 
@@ -279,11 +296,8 @@ class MapboxSingleTile extends Evented {
     this._style.update([], {transition: false});
   }
 
-  getSuggestedBufferWidth(){
-    let visibleLayerTypes = 
-       Object.keys(this._style._layers)
-       .filter(lyr=>this._style.getLayoutProperty(lyr, 'visibility') === 'visible')
-       .map(lyr=>this._style._layers[lyr].type);
+  getSuggestedBufferWidth(zoom){
+    let visibleLayerTypes = this.getLayersVisible(zoom).map(lyr => this._style._layers[lyr].type);
     visibleLayerTypes = new Set(visibleLayerTypes);
     if(visibleLayerTypes.size > 1){
       console.warn("combining multiple layer types is probably not a good idea.");
@@ -295,9 +309,16 @@ class MapboxSingleTile extends Evented {
     }
   }
 
-  getZoomRangeForLayer(layer){
-    let layerStylesheet = layerStylesheetFromLayer(this._style._layers[layer]);
-    return layerStylesheet && [layerStylesheet.minzoom_, layerStylesheet.maxzoom_];
+  getLayersVisible(zoom){
+    // if zoom is provided will filter by min/max zoom as well as by layer visibility
+    return Object.keys(this._style._layers)
+      .filter(lyr=>this._style.getLayoutProperty(lyr, 'visibility') === 'visible')
+      .filter(lyr => {
+        let layerStylesheet = layerStylesheetFromLayer(this._style._layers[lyr]);
+        return !zoom || (layerStylesheet && 
+          zoom >= layerStylesheet.minzoom_ &&
+          zoom <= layerStylesheet.maxzoom_);
+      });
   }
 
   filterForZoom(zoom){
@@ -451,8 +472,9 @@ class MapboxSingleTile extends Evented {
 
 
   queryRenderedFeatures(opts){
-    // currently we only accept a point, but it would be easy to accept a box.
-
+    let layers = {};
+    this.getLayersVisible(opts.renderedZoom)
+        .forEach(lyr => layers[lyr] = this._style._layers[lyr]);
     // convert from lat lng to...
     // (a) the tile XY id, i.e. which (x,y,z) tile are we talking about?
     let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ).map(x=>x/256 /* why 256? */) 
@@ -490,15 +512,31 @@ class MapboxSingleTile extends Evented {
     sourceCache.tilesIn = () => tilesIn;
     let nTilesPending = coords.length;
     return new Promise((res, rej) => {     
+      let timer = setTimeout(() => {
+        timer = null;
+        rej("timeout");
+      }, opts.timeoutMS || 1000);
+
       tilesIn.forEach(t => this._source.loadTile(t.tile, err => {
-        if(--nTilesPending>0){
+        if(--nTilesPending>0 || !timer){
           return;
         }
-        res(QueryFeatures.rendered(
+        clearTimeout(timer);
+
+        let featuresByRenderLayer = QueryFeatures.rendered(
           sourceCache,
-          this._style._layers, 
+          layers, 
           null /* query geometry is pre-specified in tilesIn */, 
-          {}, opts.tileZ, 0));
+          {}, opts.tileZ, 0);
+        
+
+        let featuresBySourceLayer = {};
+        Object.keys(featuresByRenderLayer).forEach(f => featuresByRenderLayer[f].map(ff => 
+          (featuresBySourceLayer[ff.layer['source-layer']] = featuresBySourceLayer[ff.layer['source-layer']] || [])
+            .push(ff._vectorTileFeature.properties)));
+        
+        res(featuresBySourceLayer);
+
       }));
     });
   }

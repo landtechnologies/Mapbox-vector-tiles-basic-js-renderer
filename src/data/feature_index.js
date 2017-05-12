@@ -129,7 +129,7 @@ class FeatureIndex {
             } else if (styleLayer.type === 'fill-extrusion') {
                 styleLayerDistance = translateDistance(this.getPaintValue('fill-extrusion-translate', styleLayer));
             } else if (styleLayer.type === 'circle') {
-                styleLayerDistance = this.getPaintValue('circle-radius', styleLayer) + translateDistance(this.getPaintValue('circle-translate', styleLayer));
+                styleLayerDistance = this.getPaintValue('circle-radius', styleLayer) + translateDistance(this.getPaintValue('circle-translate', styleLayer)) + (params.circleFudgeExtraPx || 0);
             }
             additionalRadius = Math.max(additionalRadius, styleLayerDistance * pixelsToTileUnits);
         }
@@ -157,16 +157,16 @@ class FeatureIndex {
 
         const matching = this.grid.query(minX - additionalRadius, minY - additionalRadius, maxX + additionalRadius, maxY + additionalRadius);
         matching.sort(topDownFeatureComparator);
-        this.filterMatching(result, matching, this.featureIndexArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits);
+        this.filterMatching(result, matching, this.featureIndexArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits, params.circleFudgeExtraPx);
 
         const matchingSymbols = this.collisionTile.queryRenderedSymbols(queryGeometry, args.scale);
         matchingSymbols.sort();
-        this.filterMatching(result, matchingSymbols, this.collisionTile.collisionBoxArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits);
+        this.filterMatching(result, matchingSymbols, this.collisionTile.collisionBoxArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits, params.circleFudgeExtraPx);
 
         return result;
     }
 
-    filterMatching(result, matching, array, queryGeometry, filter, filterLayerIDs, styleLayers, bearing, pixelsToTileUnits) {
+    filterMatching(result, matching, array, queryGeometry, filter, filterLayerIDs, styleLayers, bearing, pixelsToTileUnits, circleFudgeExtraPx) {
         let previousIndex;
         for (let k = 0; k < matching.length; k++) {
             const index = matching[k];
@@ -231,7 +231,7 @@ class FeatureIndex {
                             this.getPaintValue('circle-translate', styleLayer, feature),
                             this.getPaintValue('circle-translate-anchor', styleLayer, feature),
                             bearing, pixelsToTileUnits);
-                        const circleRadius = this.getPaintValue('circle-radius', styleLayer, feature) * pixelsToTileUnits;
+                        const circleRadius = (this.getPaintValue('circle-radius', styleLayer, feature) + (circleFudgeExtraPx || 0)) * pixelsToTileUnits;
                         if (!multiPolygonIntersectsBufferedMultiPoint(translatedPolygon, geometry, circleRadius)) continue;
                     }
                 }

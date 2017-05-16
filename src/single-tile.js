@@ -527,7 +527,7 @@ class MapboxSingleTile extends Evented {
           sourceCache,
           layers, 
           null /* query geometry is pre-specified in tilesIn */, 
-          {circleFudgeExtraPx: 8}, opts.tileZ, 0);
+          {circleFudgeExtraPx: 5}, opts.tileZ, 0);
         
 
         let featuresBySourceLayer = {};

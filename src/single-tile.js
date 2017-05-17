@@ -205,11 +205,6 @@ class MapboxSingleTile extends Evented {
     this._canvas.style.imageRendering = 'pixelated';
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
-    for(let k in (options.img_srcs || {})){
-      let img = new Image();
-      img.onload = () => this._style.spriteAtlas.addImage(k, img);
-      img.src = options.img_srcs[k];
-    }
     this._createGlContext();
     this.setResolution(DEFAULT_RESOLUTION, DEFAULT_BUFFER_ZONE_WIDTH);
     this._pendingRenders = {}; // coord.id => render state

@@ -465,32 +465,40 @@ class MapboxSingleTile extends Evented {
     return {id: state.renderId, callback: callback};
   }
 
+  latLngToTileCoords(opts){
+    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ)
+                                  .map(x=>x/256 /* why 256? */);
+    let pointXY = tileXY.map(x => (x - (x|0)) * opts.extent);
+    return {
+      tileX: tileXY[0] |0,
+      tileY: tileXY[1] |0,
+      tileZ: opts.tileZ,
+      pointX: pointXY[0],
+      pointY: pointXY[1]
+    }
+  }
 
   queryRenderedFeatures(opts){
     let layers = {};
     this.getLayersVisible(opts.renderedZoom)
         .forEach(lyr => layers[lyr] = this._style._layers[lyr]);
-    // convert from lat lng to...
-    // (a) the tile XY id, i.e. which (x,y,z) tile are we talking about?
-    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ).map(x=>x/256 /* why 256? */) 
-    // (b) the xy of the point within the relevant tile, expressed in [0,EXTENT] units.
-    let pointXY = tileXY.map(x => (x - (x|0)) * EXTENT);
+
+    let p = this.latLngToTileCoords(Object.assign({extent: EXTENT}, opts));
 
     // collect the coordinates of the tile containing the given point, plus any with an overlapping buffer region
     let coords = []; 
     let bufferSize = this._bufferZoneWidth/this._resolution * EXTENT; // measured in the same units as pointXY
-    let X = tileXY[0] | 0, Y = tileXY[1] | 0, Z = opts.tileZ;
-    coords.push(new TileCoord(Z, X, Y, 0));
+    coords.push(new TileCoord(p.tileZ, p.tileX, p.tileY, 0));
     // consider including the left, right, top, bottom adjacent tiles (if the point is near to the given edge)
-    (pointXY[0]<bufferSize)        && coords.push(new TileCoord(Z, X-1, Y, 0));
-    (pointXY[0]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X+1, Y, 0));
-    (pointXY[1]<bufferSize)        && coords.push(new TileCoord(Z, X, Y-1, 0));
-    (pointXY[1]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X, Y+1, 0));
+    (p.pointX<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX-1, p.tileY, 0));
+    (p.pointX>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY, 0));
+    (p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX, p.tileY-1, 0));
+    (p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX, p.tileY+1, 0));
     // and consider including the 4 corner adjacent tiles (again, if the point is near the given corner)
-    (pointXY[0]<bufferSize && pointXY[1]<bufferSize)        && coords.push(new TileCoord(Z, X-1, Y-1, 0));
-    (pointXY[0]<bufferSize && pointXY[1]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X-1, Y+1, 0));
-    (pointXY[0]>EXTENT - bufferSize && pointXY[1]<bufferSize)        && coords.push(new TileCoord(Z, X+1, Y-1, 0));
-    (pointXY[0]>EXTENT - bufferSize && pointXY[1]>EXTENT-bufferSize) && coords.push(new TileCoord(Z, X+1, Y+1, 0));
+    (p.pointX<bufferSize && p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX-1, p.tileY-1, 0));
+    (p.pointX<bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX-1, p.tileY+1, 0));
+    (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY-1, 0));
+    (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY+1, 0));
     
     // prepare the fake tileCache (we will issue tile load requests in a moment)
     let sourceCache = Object.create(this._style.sourceCaches.landinsight);
@@ -499,8 +507,8 @@ class MapboxSingleTile extends Evented {
       coord: c,
       queryGeometry: [[Point.convert([
         // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
-        pointXY[0] + EXTENT*(X-c.x),  
-        pointXY[1] + EXTENT*(Y-c.y),
+        p.pointX + EXTENT*(p.tileX-c.x),  
+        p.pointY + EXTENT*(p.tileY-c.y),
       ])]],
       scale: 1
     }));

@@ -86,6 +86,14 @@
     // inside the laodTile callback:
     console.log(new VectorTile(new Protobuf(state.tile.rawTileData)).layers); 
 
+  To view the render rectanlges, you can do something like the following, immediately before/after the drawImage call:
+   cb.ctx.lineWidth=1;
+   cb.ctx.strokeStyle='#ff' + (Math.random().toString(16) + "000000").substring(2,6);
+   cb.ctx.rect(
+    cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft - this._bufferZoneWidth)) |0,
+    cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop - this._bufferZoneWidth))|0,
+    srcRight - srcLeft, srcBottom - srcTop);
+   cb.ctx.stroke();
 
   Caching: the browser will cache the raw protobuf files for a few hours 
   (as we set the cache header on our server to let this happen). 

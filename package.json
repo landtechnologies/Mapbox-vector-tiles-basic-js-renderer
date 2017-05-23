@@ -14,7 +14,7 @@
   "dependencies": {
     "@mapbox/gl-matrix": "^0.0.1",
     "@mapbox/shelf-pack": "^3.0.0",
-    "@mapbox/sphericalmercator": "^1.0.5",
+    "@mapbox/sphericalmercator": "github:landtechnologies/sphericalmercator#24a1b89b4edc26fcfd6171d61c27e3a9ea2f885c",
     "@mapbox/unitbezier": "^0.0.0",
     "@mapbox/whoots-js": "^3.0.0",
     "brfs": "^1.4.0",

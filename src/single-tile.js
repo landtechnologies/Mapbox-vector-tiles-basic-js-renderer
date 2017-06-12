@@ -333,19 +333,24 @@ class MapboxSingleTile extends Evented {
 
             relevantCallbacks.forEach(cb => {
                 // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeFull]
-                let srcLeft = Math.max(0, this._bufferZoneWidth + cb.drawImageSpec.srcLeft - xx);
-                let srcTop = Math.max(0, this._bufferZoneWidth + cb.drawImageSpec.srcTop - yy);
+                // Note that requesting pixels from inside the buffer region is a special case, 
+                // and has to be dealt with very carefully, using src[Left|Top]Extra....
+                let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
+                let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
+                let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
+                let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
                 let srcRight = Math.min(this._canvasSizeFull,
                   this._bufferZoneWidth + cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - xx);
                 let srcBottom = Math.min(this._canvasSizeFull,
                   this._bufferZoneWidth + cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - yy);
+
                 cb.ctx.drawImage(
                   this._canvas,
-                  srcLeft, srcTop, 
-                  srcRight - srcLeft, srcBottom - srcTop, 
-                  cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft - this._bufferZoneWidth)) |0,
-                  cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop - this._bufferZoneWidth))|0,
-                  srcRight - srcLeft, srcBottom - srcTop);
+                  srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
+                  srcRight - (srcLeft + srcLeftExtra), srcBottom - (srcTop + srcTopExtra), 
+                  cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
+                  cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
+                  srcRight - (srcLeft + srcLeftExtra), srcBottom - (srcTop + srcTopExtra));
             });
           } // yy
         } // xx

@@ -1,5 +1,5 @@
 // For info on usage, development and debugging,
-// see implementation in https://drive.google.com/drive/u/1/folders/0B5nRmwke0A0ORDBqMkRIeWdrb1U.
+// see https://docs.google.com/a/landtech.co/document/d/1eB2oH3d7mpDfK8gxTiYphxPgBM7EDu5MeUNKrQwYIrQ/
 
 const Painter = require('./render/painter'),
       Style = require('./style/style'),
@@ -368,7 +368,7 @@ class MapboxSingleTile extends Evented {
   }
 
   latLngToTileCoords(opts){
-    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ)
+    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ, false)
                                   .map(x=>x/256 /* why 256? */);
     let pointXY = tileXY.map(x => (x - (x|0)) * opts.extent);
     return {

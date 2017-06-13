@@ -27,10 +27,16 @@ class Style2 extends Style {
   constructor(stylesheet, map, options){
     super(stylesheet, map, options);
     this._callsPendingStyleLoad = [];
+    this._source = {
+      isDummy: true,
+      loadTile: (tile, cb) => this._callsPendingStyleLoad.push(()=>this._source.loadTile(tile, cb)),
+      unloadTile: (tile) => this._callsPendingStyleLoad.push(()=>this._source.unloadTile(tile)), 
+      abortTile: (tile) => this._callsPendingStyleLoad.push(()=>this._source.unloadTile(tile))
+    };
   }
 
   addSource(id, source, options){
-    console.assert(!this._source, "can only load one source");
+    console.assert(!this._source || this._source.isDummy, "can only load one source");
     this._source = Source.create(id, source, this.dispatcher, this);
     this._source.tiles = source.tiles;
     this._source.map = this.map;

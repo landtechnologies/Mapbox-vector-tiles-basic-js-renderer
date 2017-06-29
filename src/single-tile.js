@@ -338,25 +338,30 @@ class MapboxSingleTile extends Evented {
             });
 
             relevantCallbacks.forEach(cb => {
-                // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeFull]
+                // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeInner]
                 // Note that requesting pixels from inside the buffer region is a special case, 
-                // and has to be dealt with very carefully, using src[Left|Top]Extra....
+                // and has to be dealt with very carefully, using src[Left|Right|Top|Bottom]Extra....
                 let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
+                let srcRight = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth -xx);
                 let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
+                let srcRightExtra = cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > this._resolution ?
+                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - this._resolution) : 0;
+                
                 let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
+                let srcBottom = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight -yy);
                 let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
-                let srcRight = Math.min(this._canvasSizeFull,
-                  this._bufferZoneWidth + cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - xx);
-                let srcBottom = Math.min(this._canvasSizeFull,
-                  this._bufferZoneWidth + cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - yy);
+                let srcBottomExtra = cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > this._resolution ?
+                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - this._resolution) : 0;
 
-                cb.ctx.drawImage(
+                cb.ctx.drawImage( 
                   this._canvas,
                   srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
-                  srcRight - (srcLeft + srcLeftExtra), srcBottom - (srcTop + srcTopExtra), 
+                  srcRight + srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra), 
                   cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
                   cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
-                  srcRight - (srcLeft + srcLeftExtra), srcBottom - (srcTop + srcTopExtra));
+                  srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
+
+
             });
           } // yy
         } // xx

@@ -83,11 +83,11 @@
       "source": "source",
       "source-layer": "layer",
       "paint": {
-        "line-width": {
+        "line-dasharray": {
           "stops": [
             [
               "1",
-              1
+              [1, 1]
             ]
           ]
         }
@@ -837,6 +837,46 @@
           "property": "mapbox",
           "type": "identity",
           "default": "invalid"
+        }
+      }
+    },
+    {
+      "id": "invalid interval property function non-ascending stop values",
+      "type": "fill",
+      "source": "source",
+      "source-layer": "layer",
+      "paint": {
+        "fill-opacity": {
+          "property": "mapbox",
+          "type": "interval",
+          "stops": [
+            [
+              1, 1
+            ],
+            [
+              0, 0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "valid categorical property function non-ascending stop values",
+      "type": "fill",
+      "source": "source",
+      "source-layer": "layer",
+      "paint": {
+        "fill-opacity": {
+          "property": "mapbox",
+          "type": "categorical",
+          "stops": [
+            [
+              1, 1
+            ],
+            [
+              0, 0
+            ]
+          ]
         }
       }
     }

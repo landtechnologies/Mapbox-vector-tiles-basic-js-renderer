@@ -1,4 +1,3 @@
-'use strict';
 
 const assert = require('assert');
 const Evented = require('../util/evented');
@@ -86,6 +85,10 @@ class Style extends Evented {
             }
         });
 
+        const transformRequest = (url, resourceType) => {
+            return  this.map ? this.map._transformRequest(url, resourceType) : { url };
+        };
+
         const stylesheetLoaded = (err, stylesheet) => {
             if (err) {
                 this.fire('error', {error: err});
@@ -104,24 +107,24 @@ class Style extends Evented {
             }
 
             if (stylesheet.sprite) {
-                this.sprite = new ImageSprite(stylesheet.sprite, this);
+                this.sprite = new ImageSprite(stylesheet.sprite, transformRequest, this);
             }
 
-            this.glyphSource = new GlyphSource(stylesheet.glyphs);
+            this.glyphSource = new GlyphSource(stylesheet.glyphs, options.localIdeographFontFamily, transformRequest, this);
             this._resolve();
             this.fire('data', {dataType: 'style'});
             this.fire('style.load');
         };
 
         if (typeof stylesheet === 'string') {
-            ajax.getJSON(mapbox.normalizeStyleURL(stylesheet), stylesheetLoaded);
+            ajax.getJSON(transformRequest(mapbox.normalizeStyleURL(stylesheet), ajax.ResourceType.Style), stylesheetLoaded);
         } else {
             browser.frame(stylesheetLoaded.bind(this, null, stylesheet));
         }
 
         this.on('data', (event) => {
             if (event.dataType === 'source' && event.sourceDataType === 'metadata') {
-                const source = this.sourceCaches[event.sourceId].getSource();
+                const source = !!this.sourceCaches[event.sourceId] && this.sourceCaches[event.sourceId].getSource();
                 if (source && source.vectorLayerIds) {
                     for (const layerId in this._layers) {
                         const layer = this._layers[layerId];
@@ -409,6 +412,7 @@ class Style extends Evented {
         const sourceCache = this.sourceCaches[id];
         delete this.sourceCaches[id];
         delete this._updatedSources[id];
+        sourceCache.fire('data', {sourceDataType: 'metadata', dataType:'source', sourceId: id});
         sourceCache.setEventedParent(null);
         sourceCache.clearTiles();
 
@@ -443,7 +447,7 @@ class Style extends Evented {
 
         // this layer is not in the style.layers array, so we pass an impossible array index
         if (this._validate(validateStyle.layer,
-                `layers.${id}`, layerObject, {arrayIndex: -1}, options)) return;
+            `layers.${id}`, layerObject, {arrayIndex: -1}, options)) return;
 
         const layer = StyleLayer.create(layerObject);
         this._validateLayer(layer);
@@ -465,7 +469,12 @@ class Style extends Evented {
             // https://github.com/mapbox/mapbox-gl-js/issues/3633
             const removed = this._removedLayers[id];
             delete this._removedLayers[id];
-            this._updatedSources[layer.source] = removed.type !== layer.type ? 'clear' : 'reload';
+            if (removed.type !== layer.type) {
+                this._updatedSources[layer.source] = 'clear';
+            } else {
+                this._updatedSources[layer.source] = 'reload';
+                this.sourceCaches[layer.source].pause();
+            }
         }
         this._updateLayer(layer);
 
@@ -490,8 +499,8 @@ class Style extends Evented {
         if (!layer) {
             this.fire('error', {
                 error: new Error(
-                  `The layer '${id}' does not exist in ` +
-                  `the map's style and cannot be moved.`
+                    `The layer '${id}' does not exist in ` +
+                    `the map's style and cannot be moved.`
                 )
             });
             return;
@@ -507,14 +516,18 @@ class Style extends Evented {
             this._updatedSymbolOrder = true;
             if (layer.source && !this._updatedSources[layer.source]) {
                 this._updatedSources[layer.source] = 'reload';
+                this.sourceCaches[layer.source].pause();
             }
         }
     }
 
     /**
-     * Remove a layer from this stylesheet, given its id.
+     * Remove the layer with the given id from the style.
+     *
+     * If no such layer exists, an `error` event is fired.
+     *
      * @param {string} id id of the layer to remove
-     * @throws {Error} if no layer is found with the given ID
+     * @fires error
      */
     removeLayer(id) {
         this._checkLoaded();
@@ -523,8 +536,8 @@ class Style extends Evented {
         if (!layer) {
             this.fire('error', {
                 error: new Error(
-                  `The layer '${id}' does not exist in ` +
-                  `the map's style and cannot be removed.`
+                    `The layer '${id}' does not exist in ` +
+                    `the map's style and cannot be removed.`
                 )
             });
             return;
@@ -563,8 +576,8 @@ class Style extends Evented {
         if (!layer) {
             this.fire('error', {
                 error: new Error(
-                  `The layer '${layerId}' does not exist in ` +
-                  `the map's style and cannot have zoom extent.`
+                    `The layer '${layerId}' does not exist in ` +
+                    `the map's style and cannot have zoom extent.`
                 )
             });
             return;
@@ -588,8 +601,8 @@ class Style extends Evented {
         if (!layer) {
             this.fire('error', {
                 error: new Error(
-                  `The layer '${layerId}' does not exist in ` +
-                  `the map's style and cannot be filtered.`
+                    `The layer '${layerId}' does not exist in ` +
+                    `the map's style and cannot be filtered.`
                 )
             });
             return;
@@ -619,8 +632,8 @@ class Style extends Evented {
         if (!layer) {
             this.fire('error', {
                 error: new Error(
-                  `The layer '${layerId}' does not exist in ` +
-                  `the map's style and cannot be styled.`
+                    `The layer '${layerId}' does not exist in ` +
+                    `the map's style and cannot be styled.`
                 )
             });
             return;
@@ -649,8 +662,8 @@ class Style extends Evented {
         if (!layer) {
             this.fire('error', {
                 error: new Error(
-                  `The layer '${layerId}' does not exist in ` +
-                  `the map's style and cannot be styled.`
+                    `The layer '${layerId}' does not exist in ` +
+                    `the map's style and cannot be styled.`
                 )
             });
             return;
@@ -717,6 +730,7 @@ class Style extends Evented {
         this._updatedLayers[layer.id] = true;
         if (layer.source && !this._updatedSources[layer.source]) {
             this._updatedSources[layer.source] = 'reload';
+            this.sourceCaches[layer.source].pause();
         }
         this._changed = true;
     }
@@ -746,15 +760,15 @@ class Style extends Evented {
         if (params && params.layers) {
             if (!Array.isArray(params.layers)) {
                 this.fire('error', {error: 'parameters.layers must be an Array.'});
-                return;
+                return [];
             }
             for (const layerId of params.layers) {
                 const layer = this._layers[layerId];
                 if (!layer) {
                     // this layer is not in the style.layers array
-                    this.fire('error', {error: `The layer '${layerId
-                        }' does not exist in the map's style and cannot be queried for features.`});
-                    return;
+                    this.fire('error', {error: `The layer '${layerId}' does not exist ` +
+                        `in the map's style and cannot be queried for features.`});
+                    return [];
                 }
                 includedSources[layer.source] = true;
             }
@@ -842,6 +856,7 @@ class Style extends Evented {
     }
 
     _reloadSource(id) {
+        this.sourceCaches[id].resume();
         this.sourceCaches[id].reload();
     }
 

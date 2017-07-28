@@ -1,4 +1,3 @@
-'use strict';
 
 const browser = require('../util/browser');
 const pixelsToTileUnits = require('../source/pixels_to_tile_units');
@@ -73,12 +72,13 @@ function drawLineTile(program, painter, tile, buffers, layer, coord, layerData, 
             gl.uniform1f(program.u_sdfgamma, painter.lineAtlas.width / (Math.min(widthA, widthB) * 256 * browser.devicePixelRatio) / 2);
 
         } else if (image) {
-            imagePosA = painter.spriteAtlas.getPosition(image.from, true);
-            imagePosB = painter.spriteAtlas.getPosition(image.to, true);
+            imagePosA = painter.spriteAtlas.getPattern(image.from);
+            imagePosB = painter.spriteAtlas.getPattern(image.to);
             if (!imagePosA || !imagePosB) return;
 
-            gl.uniform2f(program.u_pattern_size_a, imagePosA.size[0] * image.fromScale / tileRatio, imagePosB.size[1]);
-            gl.uniform2f(program.u_pattern_size_b, imagePosB.size[0] * image.toScale / tileRatio, imagePosB.size[1]);
+            gl.uniform2f(program.u_pattern_size_a, imagePosA.displaySize[0] * image.fromScale / tileRatio, imagePosB.displaySize[1]);
+            gl.uniform2f(program.u_pattern_size_b, imagePosB.displaySize[0] * image.toScale / tileRatio, imagePosB.displaySize[1]);
+            gl.uniform2fv(program.u_texsize, painter.spriteAtlas.getPixelSize());
         }
 
         gl.uniform2f(program.u_gl_units_to_pixels, 1 / painter.transform.pixelsToGLUnits[0], 1 / painter.transform.pixelsToGLUnits[1]);
@@ -106,7 +106,6 @@ function drawLineTile(program, painter, tile, buffers, layer, coord, layerData, 
             gl.uniform2fv(program.u_pattern_br_b, imagePosB.br);
             gl.uniform1f(program.u_fade, image.t);
         }
-        gl.uniform1f(program.u_width, layer.paint['line-width']);
     }
 
     painter.enableTileClippingMask(coord);

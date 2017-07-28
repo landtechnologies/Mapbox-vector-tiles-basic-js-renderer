@@ -1,4 +1,3 @@
-'use strict';
 
 const panStep = 100,
     bearingStep = 15,
@@ -119,6 +118,9 @@ class KeyboardHandler {
                 e.preventDefault();
             }
             break;
+
+        default:
+            return;
         }
 
         const map = this._map;

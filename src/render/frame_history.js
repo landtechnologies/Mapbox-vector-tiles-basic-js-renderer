@@ -1,4 +1,3 @@
-'use strict';
 
 class FrameHistory {
 
@@ -45,6 +44,10 @@ class FrameHistory {
 
         this.changed = true;
         this.previousZoom = zoom;
+    }
+
+    isVisible(zoom) {
+        return this.opacities[Math.floor(zoom * 10)] !== 0;
     }
 
     bind(gl) {

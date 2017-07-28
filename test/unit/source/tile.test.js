@@ -11,6 +11,7 @@ const FeatureIndex = require('../../../src/data/feature_index');
 const CollisionTile = require('../../../src/symbol/collision_tile');
 const CollisionBoxArray = require('../../../src/symbol/collision_box');
 const util = require('../../../src/util/util');
+const Evented = require('../../../src/util/evented');
 
 test('querySourceFeatures', (t) => {
     const features = [{
@@ -44,6 +45,23 @@ test('querySourceFeatures', (t) => {
         t.equal(result.length, 1);
         result = [];
         tile.querySourceFeatures(result, { filter: ['!=', 'oneway', true]});
+        t.equal(result.length, 0);
+        t.end();
+    });
+
+    t.test('empty geojson tile', (t) => {
+        const tile = new Tile(new TileCoord(1, 1, 1));
+        let result;
+
+        result = [];
+        tile.querySourceFeatures(result, {});
+        t.equal(result.length, 0);
+
+        const geojsonWrapper = new GeoJSONWrapper([]);
+        geojsonWrapper.name = '_geojsonTileLayer';
+        tile.rawTileData = vtpbf({ layers: { '_geojsonTileLayer': geojsonWrapper }});
+        result = [];
+        t.doesNotThrow(() => { tile.querySourceFeatures(result); });
         t.equal(result.length, 0);
         t.end();
     });
@@ -142,7 +160,7 @@ test('Tile#redoPlacement', (t) => {
                 send: () => {}
             },
             map: {
-                transform: {}
+                transform: { cameraToCenterDistance: 1, cameraToTileDistance: () => { return 1; } }
             }
         };
 
@@ -151,6 +169,29 @@ test('Tile#redoPlacement', (t) => {
 
         t.ok(tile.redoWhenDone);
         t.end();
+    });
+
+    test('reloaded tile fires a data event on completion', (t)=>{
+        const tile = new Tile(new TileCoord(1, 1, 1));
+        tile.loadVectorData(createVectorData(), createPainter());
+        t.stub(tile, 'reloadSymbolData').returns(null);
+        const source = util.extend(new Evented(), {
+            type: 'vector',
+            dispatcher: {
+                send: (name, data, cb) => {
+                    if (name === 'redoPlacement') setTimeout(cb, 300);
+                }
+            },
+            map: {
+                transform: { cameraToCenterDistance: 1, cameraToTileDistance: () => { return 1; } },
+                painter: { tileExtentVAO: {vao: 0}}
+            }
+        });
+
+        tile.redoPlacement(source);
+        tile.placementSource.on('data', ()=>{
+            if (tile.state === 'loaded') t.end();
+        });
     });
 
     t.end();
@@ -249,7 +290,7 @@ function createVectorData(options) {
     const collisionBoxArray = new CollisionBoxArray();
     return util.extend({
         collisionBoxArray: collisionBoxArray.serialize(),
-        collisionTile: (new CollisionTile(0, 0, collisionBoxArray)).serialize(),
+        collisionTile: (new CollisionTile(0, 0, 1, 1, collisionBoxArray)).serialize(),
         featureIndex: (new FeatureIndex(new TileCoord(1, 1, 1))).serialize(),
         buckets: []
     }, options);

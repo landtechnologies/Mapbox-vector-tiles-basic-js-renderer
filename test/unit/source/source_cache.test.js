@@ -24,6 +24,9 @@ function MockSourceType(id, sourceOptions, _dispatcher, eventedParent) {
             this.maxzoom = 22;
             util.extend(this, sourceOptions);
             this.setEventedParent(eventedParent);
+            if (sourceOptions.hasTile) {
+                this.hasTile = sourceOptions.hasTile;
+            }
         }
         loadTile(tile, callback) {
             if (sourceOptions.expires) {
@@ -74,19 +77,18 @@ test('SourceCache#addTile', (t) => {
             }
         });
         sourceCache.onAdd();
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
     });
 
     t.test('adds tile when uncached', (t) => {
         const coord = new TileCoord(0, 0, 0);
-        const sourceCache = createSourceCache({})
-        .on('dataloading', (data) => {
+        const sourceCache = createSourceCache({}).on('dataloading', (data) => {
             t.deepEqual(data.tile.coord, coord);
             t.equal(data.tile.uses, 1);
             t.end();
         });
         sourceCache.onAdd();
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
     });
 
     t.test('uses cached tile', (t) => {
@@ -100,16 +102,15 @@ test('SourceCache#addTile', (t) => {
                 load++;
                 callback();
             }
-        })
-        .on('dataloading', () => { add++; });
+        }).on('dataloading', () => { add++; });
 
         const tr = new Transform();
         tr.width = 512;
         tr.height = 512;
         sourceCache.updateCacheSize(tr);
-        sourceCache.addTile(coord);
-        sourceCache.removeTile(coord.id);
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
+        sourceCache._removeTile(coord.id);
+        sourceCache._addTile(coord);
 
         t.equal(load, 1);
         t.equal(add, 1);
@@ -129,7 +130,7 @@ test('SourceCache#addTile', (t) => {
         sourceCache._setCacheInvalidationTimer = (id) => {
             sourceCache._cacheTimers[id] = setTimeout(() => {}, 0);
         };
-        sourceCache.loadTile = (tile, callback) => {
+        sourceCache._loadTile = (tile, callback) => {
             tile.state = 'loaded';
             tile.getExpiryTimeout = () => time;
             sourceCache._setTileReloadTimer(coord.id, tile);
@@ -145,17 +146,17 @@ test('SourceCache#addTile', (t) => {
         t.notOk(sourceCache._timers[id]);
         t.notOk(sourceCache._cacheTimers[id]);
 
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
 
         t.ok(sourceCache._timers[id]);
         t.notOk(sourceCache._cacheTimers[id]);
 
-        sourceCache.removeTile(coord.id);
+        sourceCache._removeTile(coord.id);
 
         t.notOk(sourceCache._timers[id]);
         t.ok(sourceCache._cacheTimers[id]);
 
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
 
         t.ok(sourceCache._timers[id]);
         t.notOk(sourceCache._cacheTimers[id]);
@@ -163,7 +164,7 @@ test('SourceCache#addTile', (t) => {
         t.end();
     });
 
-    t.test('reuses wrapped tile', (t) => {
+    t.test('does not reuse wrapped tile', (t) => {
         const coord = new TileCoord(0, 0, 0);
         let load = 0,
             add = 0;
@@ -174,15 +175,14 @@ test('SourceCache#addTile', (t) => {
                 load++;
                 callback();
             }
-        })
-        .on('dataloading', () => { add++; });
+        }).on('dataloading', () => { add++; });
 
-        const t1 = sourceCache.addTile(coord);
-        const t2 = sourceCache.addTile(new TileCoord(0, 0, 0, 1));
+        const t1 = sourceCache._addTile(coord);
+        const t2 = sourceCache._addTile(new TileCoord(0, 0, 0, 1));
 
-        t.equal(load, 1);
-        t.equal(add, 1);
-        t.equal(t1, t2);
+        t.equal(load, 2);
+        t.equal(add, 2);
+        t.notEqual(t1, t2);
 
         t.end();
     });
@@ -194,9 +194,9 @@ test('SourceCache#removeTile', (t) => {
     t.test('removes tile', (t) => {
         const coord = new TileCoord(0, 0, 0);
         const sourceCache = createSourceCache({});
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
         sourceCache.on('data', ()=> {
-            sourceCache.removeTile(coord.id);
+            sourceCache._removeTile(coord.id);
             t.notOk(sourceCache._tiles[coord.id]);
             t.end();
         });
@@ -218,8 +218,8 @@ test('SourceCache#removeTile', (t) => {
         tr.height = 512;
         sourceCache.updateCacheSize(tr);
 
-        sourceCache.addTile(coord);
-        sourceCache.removeTile(coord.id);
+        sourceCache._addTile(coord);
+        sourceCache._removeTile(coord.id);
 
         t.end();
     });
@@ -240,8 +240,8 @@ test('SourceCache#removeTile', (t) => {
             }
         });
 
-        sourceCache.addTile(coord);
-        sourceCache.removeTile(coord.id);
+        sourceCache._addTile(coord);
+        sourceCache._removeTile(coord.id);
 
         t.equal(abort, 1);
         t.equal(unload, 1);
@@ -276,8 +276,7 @@ test('SourceCache / Source lifecycle', (t) => {
     });
 
     t.test('forward error event', (t) => {
-        const sourceCache = createSourceCache({ error: 'Error loading source' })
-        .on('error', (err) => {
+        const sourceCache = createSourceCache({ error: 'Error loading source' }).on('error', (err) => {
             t.equal(err.error, 'Error loading source');
             t.end();
         });
@@ -286,14 +285,13 @@ test('SourceCache / Source lifecycle', (t) => {
 
     t.test('suppress 404 errors', (t) => {
         const sourceCache = createSourceCache({status: 404, message: 'Not found'})
-        .on('error', t.fail);
+            .on('error', t.fail);
         sourceCache.onAdd();
         t.end();
     });
 
     t.test('loaded() true after source error', (t) => {
-        const sourceCache = createSourceCache({ error: 'Error loading source' })
-        .on('error', () => {
+        const sourceCache = createSourceCache({ error: 'Error loading source' }).on('error', () => {
             t.ok(sourceCache.loaded());
             t.end();
         });
@@ -383,6 +381,27 @@ test('SourceCache#update', (t) => {
         sourceCache.onAdd();
     });
 
+    t.test('respects Source#hasTile method if it is present', (t) => {
+        const transform = new Transform();
+        transform.resize(511, 511);
+        transform.zoom = 1;
+
+        const sourceCache = createSourceCache({
+            hasTile: (coord) => (coord.x !== 0)
+        });
+        sourceCache.on('data', (e) => {
+            if (e.sourceDataType === 'metadata') {
+                sourceCache.update(transform);
+                t.deepEqual(sourceCache.getIds().sort(), [
+                    new TileCoord(1, 1, 0).id,
+                    new TileCoord(1, 1, 1).id
+                ].sort());
+                t.end();
+            }
+        });
+        sourceCache.onAdd();
+    });
+
     t.test('removes unused tiles', (t) => {
         const transform = new Transform();
         transform.resize(511, 511);
@@ -454,7 +473,7 @@ test('SourceCache#update', (t) => {
 
         const sourceCache = createSourceCache({
             loadTile: function(tile, callback) {
-                tile.state = (tile.coord.id === new TileCoord(0, 0, 0).id) ? 'loaded' : 'loading';
+                tile.state = (tile.coord.id === new TileCoord(0, 0, 0, 1).id) ? 'loaded' : 'loading';
                 callback();
             }
         });
@@ -681,7 +700,7 @@ test('SourceCache#clearTiles', (t) => {
         });
         sourceCache.onAdd();
 
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
         sourceCache.clearTiles();
 
         t.equal(abort, 1);
@@ -836,7 +855,7 @@ test('SourceCache#loaded (no errors)', (t) => {
     sourceCache.on('data', (e) => {
         if (e.sourceDataType === 'metadata') {
             const coord = new TileCoord(0, 0, 0);
-            sourceCache.addTile(coord);
+            sourceCache._addTile(coord);
 
             t.ok(sourceCache.loaded());
             t.end();
@@ -855,7 +874,7 @@ test('SourceCache#loaded (with errors)', (t) => {
     sourceCache.on('data', (e) => {
         if (e.sourceDataType === 'metadata') {
             const coord = new TileCoord(0, 0, 0);
-            sourceCache.addTile(coord);
+            sourceCache._addTile(coord);
 
             t.ok(sourceCache.loaded());
             t.end();
@@ -963,12 +982,12 @@ test('SourceCache reloads expiring tiles', (t) => {
         expiryDate.setMilliseconds(expiryDate.getMilliseconds() + 50);
         const sourceCache = createSourceCache({ expires: expiryDate });
 
-        sourceCache.reloadTile = (id, state) => {
+        sourceCache._reloadTile = (id, state) => {
             t.equal(state, 'expired');
             t.end();
         };
 
-        sourceCache.addTile(coord);
+        sourceCache._addTile(coord);
     });
 
     t.end();

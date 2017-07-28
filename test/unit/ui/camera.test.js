@@ -124,6 +124,22 @@ test('camera', (t) => {
             t.end();
         });
 
+        t.test('emits pitch events, preserving eventData', (t)=>{
+            let started, pitched, ended;
+            const eventData = { data: 'ok'};
+
+            camera
+                .on('pitchstart', (d) => { started = d.data; })
+                .on('pitch', (d) => { pitched = d.data; })
+                .on('pitchend', (d) => { ended = d.data; });
+
+            camera.jumpTo({pitch: 10}, eventData);
+            t.equal(started, 'ok');
+            t.equal(pitched, 'ok');
+            t.equal(ended, 'ok');
+            t.end();
+        });
+
         t.test('cancels in-progress easing', (t) => {
             camera.panTo([3, 4]);
             t.ok(camera.isEasing());
@@ -711,6 +727,44 @@ test('camera', (t) => {
             });
         });
 
+        t.test('pans eastward across the antimeridian', (t) => {
+            const camera = createCamera();
+            camera.setCenter([170, 0]);
+            let crossedAntimeridian;
+
+            camera.on('move', () => {
+                if (camera.getCenter().lng > 170) {
+                    crossedAntimeridian = true;
+                }
+            });
+
+            camera.on('moveend', () => {
+                t.ok(crossedAntimeridian);
+                t.end();
+            });
+
+            camera.easeTo({ center: [-170, 0], duration: 10 });
+        });
+
+        t.test('pans westward across the antimeridian', (t) => {
+            const camera = createCamera();
+            camera.setCenter([-170, 0]);
+            let crossedAntimeridian;
+
+            camera.on('move', () => {
+                if (camera.getCenter().lng < -170) {
+                    crossedAntimeridian = true;
+                }
+            });
+
+            camera.on('moveend', () => {
+                t.ok(crossedAntimeridian);
+                t.end();
+            });
+
+            camera.easeTo({ center: [170, 0], duration: 10 });
+        });
+
         t.end();
     });
 
@@ -728,6 +782,13 @@ test('camera', (t) => {
                 camera.flyTo({center: 1});
             }, Error, 'throws with non-LngLatLike argument');
             t.end();
+        });
+
+        t.test('does not throw when cameras current zoom is sufficiently greater than passed zoom option', (t)=>{
+            const camera = createCamera({zoom: 22, center:[0, 0]});
+            t.doesNotThrow(()=>camera.flyTo({zoom:10, center:[0, 0]}));
+            t.end();
+
         });
 
         t.test('zooms to specified level', (t) => {
@@ -861,7 +922,7 @@ test('camera', (t) => {
             //As such; it deserves a separate test case. This test case flies the map from A to A.
             const fromTo = { center: [100, 0] };
             const camera = createCamera(fromTo);
-            let movestarted, moved, rotated, pitched, zoomstarted, zoomed, zoomended;
+            let movestarted, moved, rotated, pitched, pitchstarted, pitchended, zoomstarted, zoomed, zoomended;
             const eventData = { data: 'ok' };
 
             camera
@@ -869,6 +930,8 @@ test('camera', (t) => {
                 .on('move', (d) => { moved = d.data; })
                 .on('rotate', (d) => { rotated = d.data; })
                 .on('pitch', (d) => { pitched = d.data; })
+                .on('pitchstart', (d) => { pitchstarted = d.data; })
+                .on('pitchend', (d) => { pitchended = d.data; })
                 .on('zoomstart', (d) => { zoomstarted = d.data; })
                 .on('zoom', (d) => { zoomed = d.data; })
                 .on('zoomend', (d) => { zoomended = d.data; })
@@ -884,6 +947,8 @@ test('camera', (t) => {
                     t.equal(zoomended, undefined);
                     t.equal(rotated, undefined);
                     t.equal(pitched, undefined);
+                    t.equal(pitchstarted, undefined);
+                    t.equal(pitchended, undefined);
                     t.equal(d.data, 'ok');
                     t.end();
                 });
@@ -986,7 +1051,7 @@ test('camera', (t) => {
                 t.end();
             });
 
-            camera.flyTo({ center: [-170, 0], duration: 10 });
+            camera.flyTo({ center: [-170, 0], duration: 20 });
         });
 
         t.test('pans westward across the antimeridian', (t) => {
@@ -1033,7 +1098,7 @@ test('camera', (t) => {
             let crossedAntimeridian;
 
             camera.on('move', () => {
-                if (camera.getCenter().lng < -170) {
+                if (fixedLngLat(camera.getCenter(), 10).lng < -170) {
                     crossedAntimeridian = true;
                 }
             });
@@ -1087,6 +1152,46 @@ test('camera', (t) => {
 
             const options = { center: [1, 0], zoom: 20, minZoom };
             camera.flyTo(options);
+        });
+
+        t.test('respects transform\'s maxZoom', (t) => {
+
+            const transform = new Transform(2, 10, false);
+            transform.resize(512, 512);
+
+            const camera = new Camera(transform, {});
+
+            camera.on('moveend', () => {
+                t.equalWithPrecision(camera.getZoom(), 10, 1e-10);
+                const { lng, lat } = camera.getCenter();
+                t.equalWithPrecision(lng, 12, 1e-10);
+                t.equalWithPrecision(lat, 34, 1e-10);
+
+                t.end();
+            });
+
+            const flyOptions = { center: [12, 34], zoom: 30};
+            camera.flyTo(flyOptions);
+        });
+
+        t.test('respects transform\'s minZoom', (t) => {
+
+            const transform = new Transform(2, 10, false);
+            transform.resize(512, 512);
+
+            const camera = new Camera(transform, {});
+
+            camera.on('moveend', () => {
+                t.equalWithPrecision(camera.getZoom(), 2, 1e-10);
+                const { lng, lat } = camera.getCenter();
+                t.equalWithPrecision(lng, 12, 1e-10);
+                t.equalWithPrecision(lat, 34, 1e-10);
+
+                t.end();
+            });
+
+            const flyOptions = { center: [12, 34], zoom: 1};
+            camera.flyTo(flyOptions);
         });
 
         t.end();

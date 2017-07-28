@@ -1,4 +1,3 @@
-'use strict';
 
 const scriptDetection = require('../util/script_detection');
 const verticalizePunctuation = require('../util/verticalize_punctuation');
@@ -50,7 +49,7 @@ function breakLines(text, lineBreakPoints) {
     return lines;
 }
 
-function shapeText(text, glyphs, maxWidth, lineHeight, horizontalAlign, verticalAlign, justify, spacing, translate, verticalHeight, writingMode) {
+function shapeText(text, glyphs, maxWidth, lineHeight, textAnchor, textJustify, spacing, translate, verticalHeight, writingMode) {
     let logicalInput = text.trim();
     if (writingMode === WritingMode.vertical) logicalInput = verticalizePunctuation(logicalInput);
 
@@ -64,7 +63,7 @@ function shapeText(text, glyphs, maxWidth, lineHeight, horizontalAlign, vertical
         lines = breakLines(logicalInput, determineLineBreaks(logicalInput, spacing, maxWidth, glyphs));
     }
 
-    shapeLines(shaping, glyphs, lines, lineHeight, horizontalAlign, verticalAlign, justify, translate, writingMode, spacing, verticalHeight);
+    shapeLines(shaping, glyphs, lines, lineHeight, textAnchor, textJustify, translate, writingMode, spacing, verticalHeight);
 
     if (!positionedGlyphs.length)
         return false;
@@ -229,7 +228,39 @@ function determineLineBreaks(logicalInput, spacing, maxWidth, glyphs) {
             true));
 }
 
-function shapeLines(shaping, glyphs, lines, lineHeight, horizontalAlign, verticalAlign, justify, translate, writingMode, spacing, verticalHeight) {
+function getAnchorAlignment(textAnchor) {
+    let horizontalAlign = 0.5, verticalAlign = 0.5;
+
+    switch (textAnchor) {
+    case 'right':
+    case 'top-right':
+    case 'bottom-right':
+        horizontalAlign = 1;
+        break;
+    case 'left':
+    case 'top-left':
+    case 'bottom-left':
+        horizontalAlign = 0;
+        break;
+    }
+
+    switch (textAnchor) {
+    case 'bottom':
+    case 'bottom-right':
+    case 'bottom-left':
+        verticalAlign = 1;
+        break;
+    case 'top':
+    case 'top-right':
+    case 'top-left':
+        verticalAlign = 0;
+        break;
+    }
+
+    return { horizontalAlign: horizontalAlign, verticalAlign: verticalAlign };
+}
+
+function shapeLines(shaping, glyphs, lines, lineHeight, textAnchor, textJustify, translate, writingMode, spacing, verticalHeight) {
     // the y offset *should* be part of the font metadata
     const yOffset = -17;
 
@@ -238,6 +269,10 @@ function shapeLines(shaping, glyphs, lines, lineHeight, horizontalAlign, vertica
 
     let maxLineLength = 0;
     const positionedGlyphs = shaping.positionedGlyphs;
+
+    const justify =
+        textJustify === 'right' ? 1 :
+        textJustify === 'left' ? 0 : 0.5;
 
     for (const i in lines) {
         const line = lines[i].trim();
@@ -275,18 +310,20 @@ function shapeLines(shaping, glyphs, lines, lineHeight, horizontalAlign, vertica
         y += lineHeight;
     }
 
-    align(positionedGlyphs, justify, horizontalAlign, verticalAlign, maxLineLength, lineHeight, lines.length, translate);
+    const anchorPosition = getAnchorAlignment(textAnchor);
+
+    align(positionedGlyphs, justify, anchorPosition.horizontalAlign, anchorPosition.verticalAlign, maxLineLength, lineHeight, lines.length);
 
     // Calculate the bounding box
     const height = lines.length * lineHeight;
 
-    shaping.top += -verticalAlign * height;
+    shaping.top += -anchorPosition.verticalAlign * height;
     shaping.bottom = shaping.top + height;
-    shaping.left += -horizontalAlign * maxLineLength;
+    shaping.left += -anchorPosition.horizontalAlign * maxLineLength;
     shaping.right = shaping.left + maxLineLength;
 }
 
-// justify left = 0, right = 1, center = .5
+// justify right = 1, left = 0, center = 0.5
 function justifyLine(positionedGlyphs, glyphs, start, end, justify) {
     if (!justify)
         return;
@@ -299,9 +336,9 @@ function justifyLine(positionedGlyphs, glyphs, start, end, justify) {
     }
 }
 
-function align(positionedGlyphs, justify, horizontalAlign, verticalAlign, maxLineLength, lineHeight, lineCount, translate) {
-    const shiftX = (justify - horizontalAlign) * maxLineLength + translate[0];
-    const shiftY = (-verticalAlign * lineCount + 0.5) * lineHeight + translate[1];
+function align(positionedGlyphs, justify, horizontalAlign, verticalAlign, maxLineLength, lineHeight, lineCount) {
+    const shiftX = (justify - horizontalAlign) * maxLineLength;
+    const shiftY = (-verticalAlign * lineCount + 0.5) * lineHeight;
 
     for (let j = 0; j < positionedGlyphs.length; j++) {
         positionedGlyphs[j].x += shiftX;
@@ -310,14 +347,12 @@ function align(positionedGlyphs, justify, horizontalAlign, verticalAlign, maxLin
 }
 
 function shapeIcon(image, iconOffset) {
-    if (!image || !image.rect) return null;
-
     const dx = iconOffset[0];
     const dy = iconOffset[1];
-    const x1 = dx - image.width / 2;
-    const x2 = x1 + image.width;
-    const y1 = dy - image.height / 2;
-    const y2 = y1 + image.height;
+    const x1 = dx - image.displaySize[0] / 2;
+    const x2 = x1 + image.displaySize[0];
+    const y1 = dy - image.displaySize[1] / 2;
+    const y2 = y1 + image.displaySize[1];
 
     return new PositionedIcon(image, y1, y2, x1, x2);
 }

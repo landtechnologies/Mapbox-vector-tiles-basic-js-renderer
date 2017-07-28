@@ -1,14 +1,50 @@
-'use strict';
+// @flow
 
 const ProgramConfiguration = require('./program_configuration');
+const createVertexArrayType = require('./vertex_array_type');
+
+import type StyleLayer from '../style/style_layer';
+import type {ProgramInterface, PaintPropertyStatistics} from './program_configuration';
+import type {
+    StructArray,
+    SerializedStructArray,
+    SerializedStructArrayType
+} from '../util/struct_array';
 
 class Segment {
-    constructor(vertexOffset, primitiveOffset) {
+    vertexOffset: number;
+    primitiveOffset: number;
+    vertexLength: number;
+    primitiveLength: number;
+
+    constructor(vertexOffset: number, primitiveOffset: number) {
         this.vertexOffset = vertexOffset;
         this.primitiveOffset = primitiveOffset;
         this.vertexLength = 0;
         this.primitiveLength = 0;
     }
+}
+
+export type {Segment as Segment};
+
+export type SerializedArrayGroup = {
+    layoutVertexArray: SerializedStructArray,
+    dynamicLayoutVertexArray: SerializedStructArray,
+    elementArray: SerializedStructArray,
+    elementArray2: SerializedStructArray,
+    paintVertexArrays: {[string]: {
+        array: SerializedStructArray,
+        type: SerializedStructArrayType
+    }},
+    segments: Array<Object>,
+    segments2: Array<Object>
+}
+
+type LayerData = {
+    layer: StyleLayer,
+    programConfiguration: ProgramConfiguration,
+    paintVertexArray: StructArray,
+    paintPropertyStatistics: PaintPropertyStatistics
 }
 
 /**
@@ -18,6 +54,8 @@ class Segment {
  * A group has:
  *
  * * A "layout" vertex array, with fixed attributes, containing values calculated from layout properties.
+ * * Zero or one dynamic "layout" vertex arrays, with fixed attributes containing values that can be
+ * * recalculated each frame on the cpu.
  * * Zero, one, or two element arrays, with fixed layout, for eventual `gl.drawElements` use.
  * * Zero or more "paint" vertex arrays keyed by layer ID, each with a dynamic layout which depends
  *   on which paint properties of that layer use data-driven-functions (property functions or
@@ -31,11 +69,27 @@ class Segment {
  * @private
  */
 class ArrayGroup {
-    constructor(programInterface, layers, zoom) {
+    static MAX_VERTEX_ARRAY_LENGTH: number;
+
+    globalProperties: {zoom: number};
+    layoutVertexArray: StructArray;
+    dynamicLayoutVertexArray: StructArray;
+    elementArray: StructArray;
+    elementArray2: StructArray;
+    layerData: {[string]: LayerData};
+    segments: Array<Segment>;
+    segments2: Array<Segment>;
+
+    constructor(programInterface: ProgramInterface, layers: Array<StyleLayer>, zoom: number) {
         this.globalProperties = {zoom};
 
-        const LayoutVertexArrayType = programInterface.layoutVertexArrayType;
+        const LayoutVertexArrayType = createVertexArrayType(programInterface.layoutAttributes);
         this.layoutVertexArray = new LayoutVertexArrayType();
+
+        if (programInterface.dynamicLayoutAttributes) {
+            const DynamicLayoutVertexArrayType = createVertexArrayType(programInterface.dynamicLayoutAttributes);
+            this.dynamicLayoutVertexArray = new DynamicLayoutVertexArrayType();
+        }
 
         const ElementArrayType = programInterface.elementArrayType;
         if (ElementArrayType) this.elementArray = new ElementArrayType();
@@ -46,7 +100,7 @@ class ArrayGroup {
         this.layerData = {};
         for (const layer of layers) {
             const programConfiguration = ProgramConfiguration.createDynamic(
-                programInterface.paintAttributes || [], layer, zoom);
+                programInterface, layer, zoom);
             this.layerData[layer.id] = {
                 layer: layer,
                 programConfiguration: programConfiguration,
@@ -59,7 +113,7 @@ class ArrayGroup {
         this.segments2 = [];
     }
 
-    prepareSegment(numVertices) {
+    prepareSegment(numVertices: number): Segment {
         let segment = this.segments[this.segments.length - 1];
         if (!segment || segment.vertexLength + numVertices > ArrayGroup.MAX_VERTEX_ARRAY_LENGTH) {
             segment = new Segment(this.layoutVertexArray.length, this.elementArray.length);
@@ -68,7 +122,7 @@ class ArrayGroup {
         return segment;
     }
 
-    prepareSegment2(numVertices) {
+    prepareSegment2(numVertices: number): Segment {
         let segment = this.segments2[this.segments2.length - 1];
         if (!segment || segment.vertexLength + numVertices > ArrayGroup.MAX_VERTEX_ARRAY_LENGTH) {
             segment = new Segment(this.layoutVertexArray.length, this.elementArray2.length);
@@ -77,7 +131,7 @@ class ArrayGroup {
         return segment;
     }
 
-    populatePaintArrays(featureProperties) {
+    populatePaintArrays(featureProperties: Object) {
         for (const key in this.layerData) {
             const layerData = this.layerData[key];
             if (layerData.paintVertexArray.bytesPerElement === 0) continue;
@@ -86,7 +140,6 @@ class ArrayGroup {
                 layerData.paintVertexArray,
                 layerData.paintPropertyStatistics,
                 this.layoutVertexArray.length,
-                this.globalProperties,
                 featureProperties);
         }
     }
@@ -95,9 +148,10 @@ class ArrayGroup {
         return this.layoutVertexArray.length === 0;
     }
 
-    serialize(transferables) {
+    serialize(transferables?: Array<Transferable>): SerializedArrayGroup {
         return {
             layoutVertexArray: this.layoutVertexArray.serialize(transferables),
+            dynamicLayoutVertexArray: this.dynamicLayoutVertexArray && this.dynamicLayoutVertexArray.serialize(transferables),
             elementArray: this.elementArray && this.elementArray.serialize(transferables),
             elementArray2: this.elementArray2 && this.elementArray2.serialize(transferables),
             paintVertexArrays: serializePaintVertexArrays(this.layerData, transferables),
@@ -107,7 +161,7 @@ class ArrayGroup {
     }
 }
 
-function serializePaintVertexArrays(layerData, transferables) {
+function serializePaintVertexArrays(layerData: {[string]: LayerData}, transferables?: Array<Transferable>) {
     const paintVertexArrays = {};
     for (const layerId in layerData) {
         const inputArray = layerData[layerId].paintVertexArray;

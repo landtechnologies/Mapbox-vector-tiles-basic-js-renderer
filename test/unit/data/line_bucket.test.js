@@ -4,8 +4,8 @@ const test = require('mapbox-gl-js-test').test;
 const fs = require('fs');
 const path = require('path');
 const Protobuf = require('pbf');
-const VectorTile = require('vector-tile').VectorTile;
-const Point = require('point-geometry');
+const VectorTile = require('@mapbox/vector-tile').VectorTile;
+const Point = require('@mapbox/point-geometry');
 const ArrayGroup = require('../../../src/data/array_group');
 const LineBucket = require('../../../src/data/bucket/line_bucket');
 const StyleLayer = require('../../../src/style/style_layer');
@@ -108,7 +108,7 @@ test('LineBucket', (t) => {
 test('LineBucket segmentation', (t) => {
     // Stub ArrayGroup.MAX_VERTEX_ARRAY_LENGTH so we can test features
     // breaking across array groups without tests taking a _long_ time.
-    t.stub(ArrayGroup, 'MAX_VERTEX_ARRAY_LENGTH', 256);
+    t.stub(ArrayGroup, 'MAX_VERTEX_ARRAY_LENGTH').value(256);
 
     const layer = new StyleLayer({ id: 'test', type: 'line' });
     const bucket = new LineBucket({ layers: [layer] });

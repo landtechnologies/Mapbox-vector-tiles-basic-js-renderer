@@ -617,6 +617,20 @@ navigation:
 {% endhighlight %}
         </div>
         <% } %>
+        This URL template should include two tokens:
+        <ul>
+            <li><code>{fontstack}</code>
+                When requesting glyphs, this token is replaced with a comma separated list of fonts from a font
+                stack specified in the <a href="#layout-symbol-text-font"><code>text-font</code></a> property of
+                a symbol layer.
+            </li>
+            <li><code>{range}</code>
+                When requesting glyphs, this token is replaced with a range of 256 Unicode code points. For example,
+                to load glyphs for the <a href="https://en.wikipedia.org/wiki/Unicode_block">Unicode Basic Latin and
+                    Basic Latin-1 Supplement blocks</a>, the range would be <code>0-255</code>. The actual ranges that
+                are loaded are determined at runtime based on what text needs to be displayed.
+            </li>
+        </ul>
       </p>
     </div>
 
@@ -689,8 +703,8 @@ navigation:
         layer can have independent paint properties. Paint properties appear in the layer's <code>"paint"</code> object.
       </p>
       <p class='space-bottom4 quiet small'>Key:
-        <a class='icon smooth-ramp quiet micro space-right inline' href='#function' title='Supports interpolated functions'>supports interpolated functions</a>
-        <a class='icon step-ramp quiet micro space-right inline' href='#function' title='Supports piecewise constant functions'>supports piecewise constant functions</a>
+        <a class='icon smooth-ramp quiet micro space-right inline' href='#types-function' title='Supports interpolated functions'>supports interpolated functions</a>
+        <a class='icon step-ramp quiet micro space-right inline' href='#types-function' title='Supports piecewise constant functions'>supports piecewise constant functions</a>
         <span class='icon opacity quiet micro space-right inline' title='Transitionable'>transitionable</span>
       </p>
 
@@ -835,9 +849,16 @@ navigation:
                 <dt><var>identity</var></dt>
                 <dd>functions return their input as their output.</dd>
                 <dt><var>exponential</var></dt>
-                <dd>functions generate an output by interpolating between stops just less than and just greater than the function input. The domain must be numeric. This is the default for properties marked with <span class='icon smooth-ramp quiet micro space-right indivne' title='continuous'></span>, the "exponential" symbol.</dd>
+                <dd>functions generate an output by interpolating between stops just less than and just greater than the
+                    function input. The domain (input value) must be numeric, and the style property must support
+                    interpolation. Style properties that support interpolation are marked marked with <span
+                        class='icon smooth-ramp quiet micro space-right indivne' title='continuous'></span>, the
+                    "exponential" symbol, and <var>exponential</var> is the default function type for these properties.</dd>
                 <dt><var>interval</var></dt>
-                <dd>functions return the output value of the stop just less than the function input. The domain must be numeric. This is the default for properties marked with <span class='icon step-ramp quiet micro space-right indivne' title='discrete'></span>, the "interval" symbol.</dd>
+                <dd>functions return the output value of the stop just less than the function input. The domain (input
+                    value) must be numeric. Any style property may use interval functions. For properties marked with
+                    <span class='icon step-ramp quiet micro space-right indivne' title='discrete'></span>, the "interval"
+                    symbol, this is the default function type.</dd>
                 <dt><var>categorical</var></dt>
                 <dd>functions return the output value of the stop equal to the function input.</dd>
               </dl>
@@ -889,51 +910,51 @@ navigation:
             <tr>
               <td><code>property</code></td>
               <td class='center'>&gt;= 0.18.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>type</code></td>
               <td class='center'>&gt;= 0.18.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>exponential</code> type</td>
               <td class='center'>&gt;= 0.18.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>interval</code> type</td>
               <td class='center'>&gt;= 0.18.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>categorical</code> type</td>
               <td class='center'>&gt;= 0.18.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>identity</code> type</td>
               <td class='center'>&gt;= 0.26.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>default</code></td>
               <td class='center'>&gt;= 0.33.0</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
-              <td class='center'>Not yet supported</td>
+              <td class='center'>&gt;= 5.0.0</td>
+              <td class='center'>&gt;= 3.5.0</td>
+              <td class='center'>&gt;= 0.4.0</td>
             </tr>
             <tr>
               <td><code>colorSpace</code></td>
@@ -990,7 +1011,7 @@ navigation:
               {% endhighlight %}
           </div>
 
-          <p><strong>Zoom-and-property functions</strong> allow the appearance of a map feature to change with both its properties <em>and</em> zoom. Each stop is an array with two elements, the first is an object with a property input value and a zoom, and the second is a function output value. Note that support for property functions is not yet complete.</p>
+          <p><a id='types-function-zoom-property' class='anchor'></a><strong>Zoom-and-property functions</strong> allow the appearance of a map feature to change with both its properties <em>and</em> zoom. Each stop is an array with two elements, the first is an object with a property input value and a zoom, and the second is a function output value. Note that support for property functions is not yet complete.</p>
 
           <div class='col12 space-bottom'>
               {% highlight js %}

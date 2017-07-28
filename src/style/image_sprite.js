@@ -1,11 +1,20 @@
-'use strict';
+// @flow
 
 const Evented = require('../util/evented');
 const ajax = require('../util/ajax');
 const browser = require('../util/browser');
 const normalizeURL = require('../util/mapbox').normalizeSpriteURL;
 
+import type {RequestTransformFunction} from '../ui/map';
+
 class SpritePosition {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    pixelRatio: number;
+    sdf: boolean;
+
     constructor() {
         this.x = 0;
         this.y = 0;
@@ -17,44 +26,44 @@ class SpritePosition {
 }
 
 class ImageSprite extends Evented {
+    base: string;
+    retina: boolean;
 
-    constructor(base, eventedParent) {
+    transformRequestFn: RequestTransformFunction;
+    data: ?{[string]: SpritePosition};
+    imgData: ?Uint8ClampedArray;
+    width: ?number;
+
+    constructor(base: string, transformRequestCallback: RequestTransformFunction, eventedParent?: Evented) {
         super();
         this.base = base;
         this.retina = browser.devicePixelRatio > 1;
         this.setEventedParent(eventedParent);
+        this.transformRequestFn = transformRequestCallback;
 
         const format = this.retina ? '@2x' : '';
-
-        ajax.getJSON(normalizeURL(base, format, '.json'), (err, data) => {
+        let url = normalizeURL(base, format, '.json');
+        const jsonRequest = transformRequestCallback(url, ajax.ResourceType.SpriteJSON);
+        ajax.getJSON(jsonRequest, (err, data) => {
             if (err) {
                 this.fire('error', {error: err});
-                return;
+            } else if (data) {
+                this.data = (data : any);
+                if (this.imgData) this.fire('data', {dataType: 'style'});
             }
-
-            this.data = data;
-            if (this.imgData) this.fire('data', {dataType: 'style'});
         });
-
-        ajax.getImage(normalizeURL(base, format, '.png'), (err, img) => {
+        url = normalizeURL(base, format, '.png');
+        const imageRequest = transformRequestCallback(url, ajax.ResourceType.SpriteImage);
+        ajax.getImage(imageRequest, (err, img) => {
             if (err) {
                 this.fire('error', {error: err});
-                return;
+            } else if (img) {
+                this.imgData = browser.getImageData(img);
+
+                this.width = img.width;
+
+                if (this.data) this.fire('data', {dataType: 'style'});
             }
-
-            this.imgData = browser.getImageData(img);
-
-            // premultiply the sprite
-            for (let i = 0; i < this.imgData.length; i += 4) {
-                const alpha = this.imgData[i + 3] / 255;
-                this.imgData[i + 0] *= alpha;
-                this.imgData[i + 1] *= alpha;
-                this.imgData[i + 2] *= alpha;
-            }
-
-            this.width = img.width;
-
-            if (this.data) this.fire('data', {dataType: 'style'});
         });
     }
 
@@ -68,7 +77,7 @@ class ImageSprite extends Evented {
 
     resize(/*gl*/) {
         if (browser.devicePixelRatio > 1 !== this.retina) {
-            const newSprite = new ImageSprite(this.base);
+            const newSprite = new ImageSprite(this.base, this.transformRequestFn);
             newSprite.on('data', () => {
                 this.data = newSprite.data;
                 this.imgData = newSprite.imgData;
@@ -78,7 +87,7 @@ class ImageSprite extends Evented {
         }
     }
 
-    getSpritePosition(name) {
+    getSpritePosition(name: string) {
         if (!this.loaded()) return new SpritePosition();
 
         const pos = this.data && this.data[name];

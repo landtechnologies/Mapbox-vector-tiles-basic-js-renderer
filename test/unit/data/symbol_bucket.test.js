@@ -4,9 +4,9 @@ const test = require('mapbox-gl-js-test').test;
 const fs = require('fs');
 const path = require('path');
 const Protobuf = require('pbf');
-const VectorTile = require('vector-tile').VectorTile;
+const VectorTile = require('@mapbox/vector-tile').VectorTile;
 const SymbolBucket = require('../../../src/data/bucket/symbol_bucket');
-const Collision = require('../../../src/symbol/collision_tile');
+const CollisionTile = require('../../../src/symbol/collision_tile');
 const CollisionBoxArray = require('../../../src/symbol/collision_box');
 const GlyphAtlas = require('../../../src/symbol/glyph_atlas');
 const StyleLayer = require('../../../src/style/style_layer');
@@ -21,7 +21,7 @@ const glyphs = JSON.parse(fs.readFileSync(path.join(__dirname, '/../../fixtures/
 
 /*eslint new-cap: 0*/
 const collisionBoxArray = new CollisionBoxArray();
-const collision = new Collision(0, 0, collisionBoxArray);
+const collision = new CollisionTile(0, 0, 1, 1, collisionBoxArray);
 const atlas = new GlyphAtlas();
 for (const id in glyphs) {
     glyphs[id].bitmap = true;
@@ -53,7 +53,7 @@ test('SymbolBucket', (t) => {
 
     // add feature from bucket A
     const a = collision.grid.keys.length;
-    bucketA.populate([feature], options);
+    bucketA.populate([{feature}], options);
     bucketA.prepare(stacks, {});
     bucketA.place(collision);
 
@@ -62,7 +62,7 @@ test('SymbolBucket', (t) => {
 
     // add same feature from bucket B
     const a2 = collision.grid.keys.length;
-    bucketB.populate([feature], options);
+    bucketB.populate([{feature}], options);
     bucketB.prepare(stacks, {});
     bucketB.place(collision);
     const b2 = collision.grid.keys.length;
@@ -73,12 +73,12 @@ test('SymbolBucket', (t) => {
 
 test('SymbolBucket integer overflow', (t) => {
     t.stub(util, 'warnOnce');
-    t.stub(SymbolBucket, 'MAX_INSTANCES', 5);
+    t.stub(SymbolBucket, 'MAX_INSTANCES').value(5);
 
     const bucket = bucketSetup();
     const options = {iconDependencies: {}, glyphDependencies: {}};
 
-    bucket.populate([feature], options);
+    bucket.populate([{feature}], options);
     bucket.prepare(stacks, {});
     bucket.place(collision);
 
@@ -92,7 +92,7 @@ test('SymbolBucket redo placement', (t) => {
     const bucket = bucketSetup();
     const options = {iconDependencies: {}, glyphDependencies: {}};
 
-    bucket.populate([feature], options);
+    bucket.populate([{feature}], options);
     bucket.prepare(stacks, {});
     bucket.place(collision);
     bucket.place(collision);
@@ -129,18 +129,15 @@ test('SymbolBucket#getPaintPropertyStatistics()', (t) => {
     });
     const options = {iconDependencies: {}, glyphDependencies: {}};
 
-    bucket.populate([feature], options);
+    bucket.populate([{feature}], options);
     bucket.prepare(stacks, {
-        dot: { width: 10, height: 10, pixelRatio: 1, rect: { w: 10, h: 10 } }
+        dot: { displaySize: () => [10, 10], textureRect: { x: 0, y: 0, w: 10, h: 10 }, pixelRatio: 1 }
     });
     bucket.place(collision);
 
-    t.deepEqual(bucket.getPaintPropertyStatistics(), {
-        test: {
-            'text-halo-width': { max: 4 },
-            'icon-halo-width': { max: 5 }
-        }
-    });
+    const stats = bucket.getPaintPropertyStatistics().test;
+    t.deepEqual(stats['text-halo-width'], { max: 4 });
+    t.deepEqual(stats['icon-halo-width'], { max: 5 });
 
     t.end();
 });

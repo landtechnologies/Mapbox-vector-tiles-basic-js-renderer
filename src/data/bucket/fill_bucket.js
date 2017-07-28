@@ -1,7 +1,6 @@
-'use strict';
+// @flow
 
 const Bucket = require('../bucket');
-const createVertexArrayType = require('../vertex_array_type');
 const createElementArrayType = require('../element_array_type');
 const loadGeometry = require('../load_geometry');
 const earcut = require('earcut');
@@ -9,26 +8,31 @@ const classifyRings = require('../../util/classify_rings');
 const assert = require('assert');
 const EARCUT_MAX_RINGS = 500;
 
+import type {BucketParameters} from '../bucket';
+import type {ProgramInterface} from '../program_configuration';
+
 const fillInterface = {
-    layoutVertexArrayType: createVertexArrayType([
+    layoutAttributes: [
         {name: 'a_pos', components: 2, type: 'Int16'}
-    ]),
+    ],
     elementArrayType: createElementArrayType(3),
     elementArrayType2: createElementArrayType(2),
 
     paintAttributes: [
-        {property: 'fill-color',         type: 'Uint8'},
-        {property: 'fill-outline-color', type: 'Uint8'},
-        {property: 'fill-opacity',       type: 'Uint8', multiplier: 255}
+        {property: 'fill-color'},
+        {property: 'fill-outline-color'},
+        {property: 'fill-opacity'}
     ]
 };
 
 class FillBucket extends Bucket {
-    constructor(options) {
+    static programInterface: ProgramInterface;
+
+    constructor(options: BucketParameters) {
         super(options, fillInterface);
     }
 
-    addFeature(feature) {
+    addFeature(feature: VectorTileFeature) {
         const arrays = this.arrays;
 
         for (const polygon of classifyRings(loadGeometry(feature), EARCUT_MAX_RINGS)) {

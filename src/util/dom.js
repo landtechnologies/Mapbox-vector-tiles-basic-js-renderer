@@ -1,6 +1,5 @@
-'use strict';
 
-const Point = require('point-geometry');
+const Point = require('@mapbox/point-geometry');
 const window = require('./window');
 
 exports.create = function (tagName, className, container) {

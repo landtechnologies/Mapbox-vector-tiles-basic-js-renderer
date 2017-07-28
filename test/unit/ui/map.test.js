@@ -5,6 +5,8 @@ const util = require('../../../src/util/util');
 const window = require('../../../src/util/window');
 const Map = require('../../../src/ui/map');
 const LngLat = require('../../../src/geo/lng_lat');
+const Tile = require('../../../src/source/tile');
+const TileCoord = require('../../../src/source/tile_coord');
 
 const fixed = require('mapbox-gl-js-test/fixed');
 const fixedNum = fixed.Num;
@@ -33,6 +35,16 @@ function createMap(options, callback) {
     });
 
     return map;
+}
+
+function createStyleSource() {
+    return {
+        type: "geojson",
+        data: {
+            type: "FeatureCollection",
+            features: []
+        }
+    };
 }
 
 test('Map', (t) => {
@@ -258,36 +270,53 @@ test('Map', (t) => {
         t.end();
     });
 
+    t.test('#is_Loaded', (t)=>{
+
+        t.test('Map#isSourceLoaded', (t) => {
+            const style = createStyle();
+            const map = createMap({style: style});
+
+            map.on('load', () => {
+                map.on('data', (e) => {
+                    if (e.dataType === 'source' && e.sourceDataType === 'metadata') {
+                        t.equal(map.isSourceLoaded('geojson'), true, 'true when loaded');
+                        t.end();
+                    }
+                });
+                map.addSource('geojson', createStyleSource());
+                t.equal(map.isSourceLoaded('geojson'), false, 'false before loaded');
+            });
+        });
+
+        t.test('Map#isStyleLoaded', (t) => {
+            const style = createStyle();
+            const map = createMap({style: style});
+
+            t.equal(map.isStyleLoaded(), false, 'false before style has loaded');
+            map.on('load', () => {
+                t.equal(map.isStyleLoaded(), true, 'true when style is loaded');
+                t.end();
+            });
+        });
+
+        t.test('Map#areTilesLoaded', (t) => {
+            const style = createStyle();
+            const map = createMap({style: style});
+            t.equal(map.areTilesLoaded(), true, 'returns true if there are no sources on the map');
+            map.on('load', ()=>{
+
+                map.addSource('geojson', createStyleSource());
+                map.style.sourceCaches.geojson._tiles.fakeTile = new Tile(new TileCoord(0, 0, 0));
+                t.equal(map.areTilesLoaded(), false, 'returns false if tiles are loading');
+                map.style.sourceCaches.geojson._tiles.fakeTile.state = 'loaded';
+                t.equal(map.areTilesLoaded(), true, 'returns true if tiles are loaded');
+                t.end();
+            });
+        });
+        t.end();
+    });
+
     t.test('#getStyle', (t) => {
-        function createStyle() {
-            return {
-                version: 8,
-                center: [-73.9749, 40.7736],
-                zoom: 12.5,
-                bearing: 29,
-                pitch: 50,
-                sources: {},
-                layers: []
-            };
-        }
-
-        function createStyleSource() {
-            return {
-                type: "geojson",
-                data: {
-                    type: "FeatureCollection",
-                    features: []
-                }
-            };
-        }
-
-        function createStyleLayer() {
-            return {
-                id: 'background',
-                type: 'background'
-            };
-        }
-
         t.test('returns the style', (t) => {
             const style = createStyle();
             const map = createMap({style: style});
@@ -316,38 +345,26 @@ test('Map', (t) => {
             const map = createMap({style: style});
 
             map.on('load', () => {
-                map.on('error', (e) => {
-                    t.match(e.error.message, /There is no source with ID/);
+                map.on('error', ({ error }) => {
+                    t.match(error.message, /There is no source with ID/);
                     t.end();
                 });
                 map.isSourceLoaded('geojson');
             });
         });
 
-        t.test('#isSourceLoaded', (t) => {
-            const style = createStyle();
-            const map = createMap({style: style});
-
-            map.on('load', () => {
-                map.on('data', (e) => {
-                    if (e.dataType === 'source' && e.sourceDataType === 'metadata') {
-                        t.equal(map.isSourceLoaded('geojson'), true, 'true when loaded');
-                        t.end();
-                    }
-                });
-                map.addSource('geojson', createStyleSource());
-                t.equal(map.isSourceLoaded('geojson'), false, 'false before loaded');
-            });
-        });
-
         t.test('returns the style with added layers', (t) => {
             const style = createStyle();
             const map = createMap({style: style});
+            const layer = {
+                id: 'background',
+                type: 'background'
+            };
 
             map.on('load', () => {
-                map.addLayer(createStyleLayer());
+                map.addLayer(layer);
                 t.deepEqual(map.getStyle(), util.extend(createStyle(), {
-                    layers: [createStyleLayer()]
+                    layers: [layer]
                 }));
                 t.end();
             });
@@ -356,15 +373,19 @@ test('Map', (t) => {
         t.test('returns the style with added source and layer', (t) => {
             const style = createStyle();
             const map = createMap({style: style});
-            const layer = util.extend(createStyleLayer(), {
-                source: createStyleSource()
-            });
+            const source = createStyleSource();
+            const layer = {
+                id: 'fill',
+                type: 'fill',
+                source: 'fill'
+            };
 
             map.on('load', () => {
+                map.addSource('fill', source);
                 map.addLayer(layer);
                 t.deepEqual(map.getStyle(), util.extend(createStyle(), {
-                    sources: {background: createStyleSource()},
-                    layers: [util.extend(createStyleLayer(), {source: 'background'})]
+                    sources: { fill: source },
+                    layers: [layer]
                 }));
                 t.end();
             });
@@ -373,7 +394,7 @@ test('Map', (t) => {
         t.test('creates a new Style if diff fails', (t) => {
             const style = createStyle();
             const map = createMap({ style: style });
-            t.stub(map.style, 'setState', () => {
+            t.stub(map.style, 'setState').callsFake(() => {
                 throw new Error('Dummy error');
             });
 
@@ -386,7 +407,7 @@ test('Map', (t) => {
         t.test('creates a new Style if diff option is false', (t) => {
             const style = createStyle();
             const map = createMap({ style: style });
-            t.stub(map.style, 'setState', () => {
+            t.stub(map.style, 'setState').callsFake(() => {
                 t.fail();
             });
 
@@ -622,6 +643,24 @@ test('Map', (t) => {
                 [bounds[1][0].toFixed(n), bounds[1][1].toFixed(n)]
             ];
         }
+
+        t.end();
+    });
+
+    t.test('#getMaxBounds', (t) => {
+        t.test('returns null when no bounds set', (t) => {
+            const map = createMap({zoom:0});
+            t.equal(map.getMaxBounds(), null);
+            t.end();
+        });
+
+        t.test('returns bounds', (t) => {
+            const map = createMap({zoom:0});
+            const bounds = [[-130.4297, 50.0642], [-61.52344, 24.20688]];
+            map.setMaxBounds(bounds);
+            t.deepEqual(map.getMaxBounds().toArray(), bounds);
+            t.end();
+        });
 
         t.end();
     });
@@ -872,6 +911,12 @@ test('Map', (t) => {
             });
         });
 
+        t.test('returns an empty array when no style is loaded', (t) => {
+            const map = createMap({style: undefined});
+            t.deepEqual(map.queryRenderedFeatures(), []);
+            t.end();
+        });
+
         t.end();
     });
 
@@ -939,8 +984,8 @@ test('Map', (t) => {
             });
 
             map.on('style.load', () => {
-                map.style.on('error', (e) => {
-                    t.match(e.error.message, /does not exist in the map\'s style and cannot be styled/);
+                map.style.on('error', ({ error }) => {
+                    t.match(error.message, /does not exist in the map\'s style and cannot be styled/);
                     t.end();
                 });
                 map.setLayoutProperty('non-existant', 'text-transform', 'lowercase');
@@ -1145,8 +1190,8 @@ test('Map', (t) => {
             });
 
             map.on('style.load', () => {
-                map.style.on('error', (e) => {
-                    t.match(e.error.message, /does not exist in the map\'s style and cannot be styled/);
+                map.style.on('error', ({ error }) => {
+                    t.match(error.message, /does not exist in the map\'s style and cannot be styled/);
                     t.end();
                 });
                 map.setPaintProperty('non-existant', 'background-color', 'red');
@@ -1161,7 +1206,7 @@ test('Map', (t) => {
             const map = createMap({ style: { version: 8, sources: {}, layers: [] } });
 
             t.spy(map, 'fire');
-            t.stub(console, 'error', (error) => {
+            t.stub(console, 'error').callsFake((error) => {
                 if (error.message === 'version: expected one of [8], 7 found') {
                     t.notOk(map.fire.calledWith('error'));
                     console.error.restore();

@@ -1,4 +1,3 @@
-'use strict';
 /* eslint-disable new-cap */
 
 const isChar = require('./is_char_in_unicode_block');
@@ -15,6 +14,23 @@ module.exports.allowsVerticalWritingMode = function(chars) {
         if (exports.charHasUprightVerticalOrientation(char.charCodeAt(0))) return true;
     }
     return false;
+};
+
+module.exports.allowsLetterSpacing = function(chars) {
+    for (const char of chars) {
+        if (!exports.charAllowsLetterSpacing(char.charCodeAt(0))) return false;
+    }
+    return true;
+};
+
+module.exports.charAllowsLetterSpacing = function(char) {
+    if (isChar['Arabic'](char)) return false;
+    if (isChar['Arabic Supplement'](char)) return false;
+    if (isChar['Arabic Extended-A'](char)) return false;
+    if (isChar['Arabic Presentation Forms-A'](char)) return false;
+    if (isChar['Arabic Presentation Forms-B'](char)) return false;
+
+    return true;
 };
 
 module.exports.charAllowsIdeographicBreaking = function(char) {
@@ -46,7 +62,7 @@ module.exports.charAllowsIdeographicBreaking = function(char) {
 };
 
 // The following logic comes from
-// <http://www.unicode.org/Public/vertical/revision-16/VerticalOrientation-16.txt>.
+// <http://www.unicode.org/Public/vertical/revision-17/VerticalOrientation-17.txt>.
 // The data file denotes with “U” or “Tu” any codepoint that may be drawn
 // upright in vertical text but does not distinguish between upright and
 // “neutral” characters.

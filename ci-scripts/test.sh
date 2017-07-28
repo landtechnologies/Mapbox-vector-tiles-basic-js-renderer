@@ -6,6 +6,8 @@ nvm use ${NODE_VERSION}
 set -e
 set -o pipefail
 
+git fetch --prune
+
 # add npm packages to $PATH
 PATH=$(pwd)/node_modules/.bin:$PATH
 
@@ -18,6 +20,7 @@ rm -rf coverage .nyc_output
 # run linters
 npm run lint
 npm run lint-docs
+npm run lint-css
 
 # build and run build tests
 npm run build-min

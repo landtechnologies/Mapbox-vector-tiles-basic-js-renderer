@@ -46,8 +46,10 @@ class Style2 extends Style {
       getVisibleCoordinates: () => [this._currentCoord],
       getTile: () => this._currentTile,
       reload: () => {},
+      pause: () => {},
+      resume: () => {},
       serialize: () => this._source.serialize(),
-      map: {}
+      map: { }
     }; 
     this.on('data', e => {
       if(e.dataType !== "style"){
@@ -104,7 +106,9 @@ class MapboxSingleTile extends Evented {
   constructor(options) {
     super();
     this._initOptions = options = options || {}; 
-    this.transform = {zoom: 0, angle: 0, pitch: 0, scaleZoom: ()=> 0, cameraToCenterDistance: 1};
+    this.transform = {
+      zoom: 0, angle: 0, pitch: 0, _pitch: 0, scaleZoom: ()=> 0,
+      cameraToCenterDistance: 1, cameraToTileDistance: () => 1 };
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
@@ -120,6 +124,10 @@ class MapboxSingleTile extends Evented {
 
   get _source(){
     return this._style._source;
+  }
+
+  _transformRequest(url, resourceType) {
+    return {url: url, headers: {}, credentials: ''};
   }
 
   _calculatePosMatrix(transX, transY) {   
@@ -244,6 +252,8 @@ class MapboxSingleTile extends Evented {
     this._canvas.width = this._canvasSizeFull;
     this._canvas.height = this._canvasSizeFull;
     this.transform.pixelsToGLUnits = [2 / this._canvasSizeFull, -2 / this._canvasSizeFull];
+    this.transform.width = this._canvasSizeFull;
+    this.transform.height = this._canvasSizeFull;
     this.painter.resize(this._canvasSizeFull, this._canvasSizeFull); 
     this._cancelAllPending(false);
 

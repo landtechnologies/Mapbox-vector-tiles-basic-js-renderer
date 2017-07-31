@@ -1,78 +1,76 @@
 // @flow
 
-const fs = require('fs');
-
 // readFileSync calls must be written out long-form for brfs.
 /* eslint-disable prefer-template, no-path-concat */
 
 module.exports = {
     prelude: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/_prelude.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/_prelude.vertex.glsl', 'utf8')
+        fragmentSource: require('./_prelude.fragment.glsl'),
+        vertexSource: require( './_prelude.vertex.glsl')
     },
     circle: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/circle.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/circle.vertex.glsl', 'utf8')
+        fragmentSource: require('./circle.fragment.glsl'),
+        vertexSource: require('./circle.vertex.glsl')
     },
     collisionBox: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/collision_box.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/collision_box.vertex.glsl', 'utf8')
+        fragmentSource: require('./collision_box.fragment.glsl'),
+        vertexSource: require('./collision_box.vertex.glsl')
     },
     debug: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/debug.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/debug.vertex.glsl', 'utf8')
+        fragmentSource: require('./debug.fragment.glsl'),
+        vertexSource: require('./debug.vertex.glsl')
     },
     fill: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/fill.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/fill.vertex.glsl', 'utf8')
+        fragmentSource: require('./fill.fragment.glsl'),
+        vertexSource: require('./fill.vertex.glsl')
     },
     fillOutline: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/fill_outline.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/fill_outline.vertex.glsl', 'utf8')
+        fragmentSource: require('./fill_outline.fragment.glsl'),
+        vertexSource: require('./fill_outline.vertex.glsl')
     },
     fillOutlinePattern: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/fill_outline_pattern.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/fill_outline_pattern.vertex.glsl', 'utf8')
+        fragmentSource: require('./fill_outline_pattern.fragment.glsl'),
+        vertexSource: require('./fill_outline_pattern.vertex.glsl')
     },
     fillPattern: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/fill_pattern.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/fill_pattern.vertex.glsl', 'utf8')
+        fragmentSource: require('./fill_pattern.fragment.glsl'),
+        vertexSource: require('./fill_pattern.vertex.glsl')
     },
     fillExtrusion: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/fill_extrusion.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/fill_extrusion.vertex.glsl', 'utf8')
+        fragmentSource: require('./fill_extrusion.fragment.glsl'),
+        vertexSource: require('./fill_extrusion.vertex.glsl')
     },
     fillExtrusionPattern: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/fill_extrusion_pattern.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/fill_extrusion_pattern.vertex.glsl', 'utf8')
+        fragmentSource: require('./fill_extrusion_pattern.fragment.glsl'),
+        vertexSource: require('./fill_extrusion_pattern.vertex.glsl')
     },
     extrusionTexture: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/extrusion_texture.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/extrusion_texture.vertex.glsl', 'utf8')
+        fragmentSource: require('./extrusion_texture.fragment.glsl'),
+        vertexSource: require('./extrusion_texture.vertex.glsl')
     },
     line: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/line.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/line.vertex.glsl', 'utf8')
+        fragmentSource: require('./line.fragment.glsl'),
+        vertexSource: require('./line.vertex.glsl')
     },
     linePattern: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/line_pattern.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/line_pattern.vertex.glsl', 'utf8')
+        fragmentSource: require('./line_pattern.fragment.glsl'),
+        vertexSource: require('./line_pattern.vertex.glsl')
     },
     lineSDF: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/line_sdf.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/line_sdf.vertex.glsl', 'utf8')
+        fragmentSource: require('./line_sdf.fragment.glsl'),
+        vertexSource: require('./line_sdf.vertex.glsl')
     },
     raster: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/raster.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/raster.vertex.glsl', 'utf8')
+        fragmentSource: require('./raster.fragment.glsl'),
+        vertexSource: require('./raster.vertex.glsl')
     },
     symbolIcon: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/symbol_icon.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/symbol_icon.vertex.glsl', 'utf8')
+        fragmentSource: require('./symbol_icon.fragment.glsl'),
+        vertexSource: require('./symbol_icon.vertex.glsl')
     },
     symbolSDF: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/symbol_sdf.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/symbol_sdf.vertex.glsl', 'utf8')
+        fragmentSource: require('./symbol_sdf.fragment.glsl'),
+        vertexSource: require('./symbol_sdf.vertex.glsl')
     }
 };
 

@@ -208,16 +208,17 @@ class MapboxSingleTile extends Evented {
   }
 
   getSuggestedBufferWidth(zoom){
-    let visibleLayerTypes = this.getLayersVisible(zoom).map(lyr => this._style._layers[lyr].type);
-    visibleLayerTypes = new Set(visibleLayerTypes);
-    if(visibleLayerTypes.size > 1){
-      console.warn("combining multiple layer types is probably not a good idea.");
-    }
-    if(visibleLayerTypes.has("circle") || visibleLayerTypes.has("symbol")){
-      return 30;
-    } else {
-      return 0;
-    }
+    let visibleLayerTypes = new Set(this.getLayersVisible(zoom).map(lyr => this._style._layers[lyr].type));
+    let suggestions = [];
+
+    visibleLayerTypes.delete("circle") && suggestions.push(30);
+    visibleLayerTypes.delete("symbol") && suggestions.push(30);
+    visibleLayerTypes.delete('fill') && suggestions.push(0);
+    visibleLayerTypes.delete('line') && suggestions.push(0);
+    (suggestions.length === 0) && console.warn('no layers recognised')
+    (visibleLayerTypes.size > 0) && console.warn('unknown types ignored')
+    suggestions.some(x=>x!==suggestions[0]) && console.warn('clash of buffer width suggestions');
+    return suggestions[0];
   }
 
   getLayersVisible(zoom){

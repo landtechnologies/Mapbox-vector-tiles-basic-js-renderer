@@ -215,9 +215,9 @@ class MapboxSingleTile extends Evented {
     visibleLayerTypes.delete("symbol") && suggestions.push(30);
     visibleLayerTypes.delete('fill') && suggestions.push(0);
     visibleLayerTypes.delete('line') && suggestions.push(0);
-    (suggestions.length === 0) && console.log('warn', 'no layers recognised')
-    (visibleLayerTypes.size > 0) && console.log('warn', 'unknown types ignored')
-    suggestions.some(x=>x!==suggestions[0]) && console.log('warn', 'clash of buffer width suggestions');
+    (suggestions.length === 0) && console.warn('no layers recognised');
+    (visibleLayerTypes.size > 0) && console.warn('unknown types ignored');
+    suggestions.some(x=>x!==suggestions[0]) && console.warn('clash of buffer width suggestions');
     return suggestions[0];
   }
 

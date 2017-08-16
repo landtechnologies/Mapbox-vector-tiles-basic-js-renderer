@@ -79,6 +79,19 @@ class Style2 extends Style {
     }
   }
 
+  setLayers(visibleLayerNames){
+    // Note this is not part of mapbox style, but handy to put it here for use with pending-style    
+    let exec = () => Object.keys(this._layers).forEach(layerName => 
+      this.setLayoutProperty(layerName, 'visibility', 
+        visibleLayerNames.indexOf(layerName) > -1 ? 'visible' : 'none'));
+
+    if(this._callsPendingStyleLoad){
+      this._callsPendingStyleLoad.push(exec);
+    } else {
+      exec();
+    }
+  }
+
 };
 
 class Painter2 extends Painter {
@@ -201,9 +214,8 @@ class MapboxSingleTile extends Evented {
 
   // takes an array of layer names to show
   setLayers(visibleLayers){
+    this._style.setLayers(visibleLayers);
     this._cancelAllPending(false);
-    Object.keys(this._style._layers).forEach(layerName => 
-      this._style.setLayoutProperty(layerName, 'visibility', visibleLayers.indexOf(layerName) > -1 ? 'visible' : 'none'));
     this._style.update([], {transition: false});
   }
 
@@ -215,7 +227,6 @@ class MapboxSingleTile extends Evented {
     visibleLayerTypes.delete("symbol") && suggestions.push(30);
     visibleLayerTypes.delete('fill') && suggestions.push(0);
     visibleLayerTypes.delete('line') && suggestions.push(0);
-    (suggestions.length === 0) && console.warn('no layers recognised');
     (visibleLayerTypes.size > 0) && console.warn('unknown types ignored');
     suggestions.some(x=>x!==suggestions[0]) && console.warn('clash of buffer width suggestions');
     return suggestions[0];

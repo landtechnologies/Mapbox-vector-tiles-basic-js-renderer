@@ -11,7 +11,8 @@ const Painter = require('./render/painter'),
       Tile = require('./source/tile'),
       Point = require('point-geometry'),
       QueryFeatures = require('./source/query_features'),
-      SphericalMercator = require('@mapbox/sphericalmercator');
+      SphericalMercator = require('@mapbox/sphericalmercator'),
+      Cache = require('./util/lru_cache');
 
 var sphericalMercator = new SphericalMercator();
 
@@ -122,6 +123,7 @@ class MapboxSingleTile extends Evented {
     this.transform = {
       zoom: 0, angle: 0, pitch: 0, _pitch: 0, scaleZoom: ()=> 0,
       cameraToCenterDistance: 1, cameraToTileDistance: () => 1 };
+    this._tileCache = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
@@ -133,6 +135,7 @@ class MapboxSingleTile extends Evented {
     this._createGlContext();
     this.setResolution(DEFAULT_RESOLUTION, DEFAULT_BUFFER_ZONE_WIDTH);
     this._pendingRenders = {}; // coord.id => render state
+    this._tilesInUse = {}; // coord.id => tile (note that tile's have a .uses counter)
   }
 
   get _source(){
@@ -201,21 +204,21 @@ class MapboxSingleTile extends Evented {
 
   setPaintProperty(layer, prop, val){
     this._style.setPaintProperty(layer, prop, val);
-    this._cancelAllPending(false);
+    this._cancelAllPendingRenders();
     this._style.update([], {transition: false});
   }
 
   setFilter(layer, filter){
     // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
     this._style.setFilter(layer, filter);
-    this._cancelAllPending(false);
+    this._cancelAllPendingRenders();
     this._style.update([], {transition: false});
   }
 
   // takes an array of layer names to show
   setLayers(visibleLayers){
     this._style.setLayers(visibleLayers);
-    this._cancelAllPending(false);
+    this._cancelAllPendingRenders();
     this._style.update([], {transition: false});
   }
 
@@ -249,7 +252,7 @@ class MapboxSingleTile extends Evented {
       return;
     }
     this.painter._filterForZoom = zoom;
-    this._cancelAllPending(false);
+    this._cancelAllPendingRenders();
   }
 
   setResolution(r, bufferZoneWidth){
@@ -267,7 +270,7 @@ class MapboxSingleTile extends Evented {
     this.transform.width = this._canvasSizeFull;
     this.transform.height = this._canvasSizeFull;
     this.painter.resize(this._canvasSizeFull, this._canvasSizeFull); 
-    this._cancelAllPending(false);
+    this._cancelAllPendingRenders();
 
     if(this._debugBufferEl){
       this._debugBufferEl.style.width = this._canvasSizeFull + 'px';
@@ -275,32 +278,64 @@ class MapboxSingleTile extends Evented {
     } 
   }
 
-  _cancelAllPending(){
+  _invalidateAllLoadedTiles(){
+    // this needs to be called on all changes except zoom & pan
+    // by removing the loadedPromise, we force a fresh load next time the tile
+    // is needed...although note that "fresh" is only partial because the rawData
+    // is still available.
+    for(var id in this._tilesInUse){
+      this._tilesInUse[id].loadedPromise = null;
+    }
+    this._tileCache.keys().forEach(id => 
+      this._tileCache.getWithoutRemoving(id).loadedPromise = null);
+  }
+
+  _cancelAllPendingRenders(){ 
     for(var id in this._pendingRenders){
-      this._cancelRender(this._pendingRenders[id]);
+      var state = this._pendingRenders[id];
+      while(state.callbacks.length){
+        state.callbacks.shift().func("canceled");
+        this._decrementTileUses(state.tile);
+      }
+      clearTimeout(state.timeout);
     }
     this._pendingRenders = {};
+    this._invalidateAllLoadedTiles();
   }
 
-  _cancelRender(state){
-    while(state.callbacks.length){
-      state.callbacks.shift().func("canceled");
+  _decrementTileUses(tile){
+    tile.uses--;
+    if(tile.uses > 0){
+      return;
     }
-    clearTimeout(state.timeout);
-    delete this._pendingRenders[state.id];
-    this._source.abortTile(state.tile);
-    this._source.unloadTile(state.tile);
+    delete this._tilesInUse[tile.coord.id];
+    if(tile.hasData()){
+      // this tile is worth keeping...
+      this._tileCache.add(tile.coord.id, tile);
+    } else {
+      // this tile isn't ready and isn't needed, so abandon it...
+      this._source.abortTile(tile);
+      this._source.unloadTile(tile);
+    }
   }
 
-  cancelRender(renderRef, state){
+  releaseRender(renderRef, state){
+    this._decrementTileUses(this._tilesInUse[renderRef.coordId]);
+
     var state = Object.values(this._pendingRenders)
                       .find(state => state.renderId === renderRef.id);
     if(!state){
-      return;
-    }
+      return; // tile was already rendered
+    } 
+     
     var idx = state.callbacks.indexOf(renderRef.callback);
-    (idx !== -1) && state.callbacks.splice(idx,1);
-    (state.callbacks.length === 0) && this._cancelRender(state);
+    (idx !== -1) && state.callbacks.splice(idx,1); 
+    if(state.callbacks.length === 0){
+      // we no longer need to render
+      clearTimeout(state.timeout);
+      delete this._pendingRenders[state.id];
+    }
+    
   }
 
   renderTile(z, x, y, ctx, drawImageSpec, next){
@@ -313,15 +348,23 @@ class MapboxSingleTile extends Evented {
     var id = coord.id;
     var state = this._pendingRenders[id];
     if(state){
+      // this tile is already pending render, so we don't need to do much...
+      state.tile.uses++;
       state.callbacks.push(callback);
-      return {id: state.renderId, callback: callback};
+      return {id: state.renderId, callback: callback, coordId: id};
     }
 
+    // We need to create a pending render and possibly create & load a new tile...
+    var tile = this._tilesInUse[id] ||
+               this._tileCache.get(id) || // note this removes it from the cache if it exists
+               new Tile(coord.wrapped(), this._resolution, z);
+    tile.uses++;
+    this._tilesInUse[id] = tile;
     var renderId = ++this._nextRenderId;
     state = this._pendingRenders[id] = {
       id: id,
       callbacks: [callback],
-      tile: new Tile(coord.wrapped(), this._resolution, z),
+      tile: tile,
       coord: coord,
       renderId: renderId,
       timeout: setTimeout(() => {
@@ -332,77 +375,91 @@ class MapboxSingleTile extends Evented {
       }, TILE_LOAD_TIMEOUT)
     };   
 
-    this._source.loadTile(state.tile, err => {
+    if(!state.tile.loadedPromise){
+      // We need to actually issue the load request...
+      state.tile.loadedPromise = new Promise((res, rej) => 
+        this._source.loadTile(state.tile, err => err ? rej(err) : res()));
+    }
+
+    // once the tile is loaded we can then execute the pending render for it...
+    state.tile.loadedPromise.then(() => {
       state = this._pendingRenders[id];
       if(!state || state.renderId !== renderId){
         return; // render for this tile has been canceled, or superceded.
       }
-      if(!err){
-        this.transform.zoom = z;
-        state.tile.tileSize = this._resolution;
-        this._style._currentCoord = state.coord;
-        this._style._currentTile = state.tile;
-        for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
-          for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
-            var relevantCallbacks = state.callbacks.filter(cb =>
-              cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > xx &&
-              cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
-              cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > yy && 
-              cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
-            if(relevantCallbacks.length === 0){
-              continue;
-            }
+      this.transform.zoom = z;
+      state.tile.tileSize = this._resolution;
+      this._style._currentCoord = state.coord;
+      this._style._currentTile = state.tile;
+      for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
+        for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
+          var relevantCallbacks = state.callbacks.filter(cb =>
+            cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > xx &&
+            cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
+            cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > yy && 
+            cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
+          if(relevantCallbacks.length === 0){
+            continue;
+          }
 
-            state.coord.posMatrix = this._calculatePosMatrix(xx, yy);
-            this.painter.render(this._style, {
-              showTileBoundaries: this._initOptions.showTileBoundaries,
-              showOverdrawInspector: this._initOptions.showOverdrawInspector
-            });
+          state.coord.posMatrix = this._calculatePosMatrix(xx, yy);
+          this.painter.render(this._style, {
+            showTileBoundaries: this._initOptions.showTileBoundaries,
+            showOverdrawInspector: this._initOptions.showOverdrawInspector
+          });
 
-            relevantCallbacks.forEach(cb => {
-                // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeInner]
-                // Note that requesting pixels from inside the buffer region is a special case, 
-                // and has to be dealt with very carefully, using src[Left|Right|Top|Bottom]Extra....
-                let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
-                let srcRight = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth -xx);
-                let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
-                let srcRightExtra = cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > this._resolution ?
-                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - this._resolution) : 0;
-                
-                let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
-                let srcBottom = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight -yy);
-                let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
-                let srcBottomExtra = cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > this._resolution ?
-                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - this._resolution) : 0;
+          relevantCallbacks.forEach(cb => {
+              // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeInner]
+              // Note that requesting pixels from inside the buffer region is a special case, 
+              // and has to be dealt with very carefully, using src[Left|Right|Top|Bottom]Extra....
+              let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
+              let srcRight = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth -xx);
+              let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
+              let srcRightExtra = cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > this._resolution ?
+                                     Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - this._resolution) : 0;
+              
+              let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
+              let srcBottom = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight -yy);
+              let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
+              let srcBottomExtra = cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > this._resolution ?
+                                     Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - this._resolution) : 0;
 
-                cb.ctx.drawImage( 
-                  this._canvas,
-                  srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
-                  srcRight + srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra), 
-                  cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
-                  cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
-                  srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
+              cb.ctx.drawImage( 
+                this._canvas,
+                srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
+                srcRight + srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra), 
+                cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
+                cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
+                srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
 
 
-            });
-          } // yy
-        } // xx
-        
-        this._style._currentCoord = null;
-        this._style._currentTile = null;
+          });
+        } // yy
+      } // xx
+      
+      this._style._currentCoord = null;
+      this._style._currentTile = null;
+
+      while(state.callbacks.length){
+        state.callbacks.shift().func();
       }
-
+      clearTimeout(state.timeout);
+      delete this._pendingRenders[id];
+    })
+    .catch(err => {
+      state = this._pendingRenders[id];
+      if(!state || state.renderId !== renderId){
+        return; // render for this tile has been canceled, or superceded.
+      }
       while(state.callbacks.length){
         state.callbacks.shift().func(err);
       }
-
       clearTimeout(state.timeout);
       delete this._pendingRenders[id];
       this._source.unloadTile(state.tile);
-      
     });
 
-    return {id: state.renderId, callback: callback};
+    return {id: state.renderId, callback: callback, coordId: id};
   }
 
   latLngToTileCoords(opts){
@@ -474,7 +531,8 @@ class MapboxSingleTile extends Evented {
         
 
         let featuresBySourceLayer = {};
-        Object.keys(featuresByRenderLayer).forEach(f => featuresByRenderLayer[f].map(ff => 
+        Object.keys(featuresByRenderLayer)
+          .forEach(f => featuresByRenderLayer[f].map(ff => 
           (featuresBySourceLayer[ff.layer['source-layer']] = featuresBySourceLayer[ff.layer['source-layer']] || [])
             .push(ff._vectorTileFeature.properties)));
         

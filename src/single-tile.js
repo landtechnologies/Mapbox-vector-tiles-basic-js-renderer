@@ -27,12 +27,13 @@ var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet
 class Style2 extends Style {
   constructor(stylesheet, map, options){
     super(stylesheet, map, options);
-    this._callsPendingStyleLoad = [];
+    this._loadedPromise = new Promise(res => 
+      this.on('data', e => e.dataType === "style" && res()));
     this._source = {
       isDummy: true,
-      loadTile: (tile, cb) => this._callsPendingStyleLoad.push(()=>this._source.loadTile(tile, cb)),
-      unloadTile: (tile) => this._callsPendingStyleLoad.push(()=>this._source.unloadTile(tile)), 
-      abortTile: (tile) => this._callsPendingStyleLoad.push(()=>this._source.unloadTile(tile))
+      loadTile: (tile, cb) => this._loadedPromise.then(()=>this._source.loadTile(tile, cb)),
+      unloadTile: (tile) => this._loadedPromise.then(()=>this._source.unloadTile(tile)), 
+      abortTile: (tile) => this._loadedPromise.then(()=>this._source.unloadTile(tile))
     };
   }
 
@@ -52,45 +53,26 @@ class Style2 extends Style {
       serialize: () => this._source.serialize(),
       map: { }
     }; 
-    this.on('data', e => {
-      if(e.dataType !== "style"){
-        return;
-      }
-      this._recalculate(16); // TODO: use proper zoom value (which depends on z at the point we actually render)
-      while(this._callsPendingStyleLoad && this._callsPendingStyleLoad.length){
-        this._callsPendingStyleLoad.shift()();
-      }
-      this._callsPendingStyleLoad = null;
-    });
+    this._loadedPromise
+      .then(() => this._recalculate(16)); // TODO: use proper zoom value (which depends on z at the point we actually render)
   }
 
   setPaintProperty(layer, prop, val){
-    if(this._callsPendingStyleLoad){
-      this._callsPendingStyleLoad.push(()=> super.setPaintProperty(layer, prop, val));      
-    } else {
-      super.setPaintProperty(layer, prop, val);
-    }
+    return this._loadedPromise.then(() => super.setPaintProperty(layer, prop, val));      
   }
 
   setFilter(layer, filter){
-    if(this._callsPendingStyleLoad){
-      this._callsPendingStyleLoad.push(()=> super.setFilter(layer, filter));      
-    } else {
-      super.setFilter(layer, filter);
-    }
+    return this._loadedPromise.then(() => super.setFilter(layer, filter));   
   }
 
   setLayers(visibleLayerNames){
     // Note this is not part of mapbox style, but handy to put it here for use with pending-style    
-    let exec = () => Object.keys(this._layers).forEach(layerName => 
-      this.setLayoutProperty(layerName, 'visibility', 
-        visibleLayerNames.indexOf(layerName) > -1 ? 'visible' : 'none'));
-
-    if(this._callsPendingStyleLoad){
-      this._callsPendingStyleLoad.push(exec);
-    } else {
-      exec();
-    }
+    return this._loadedPromise
+      .then(() => Object.keys(this._layers)
+        .forEach(layerName => 
+        this.setLayoutProperty(layerName, 'visibility', 
+          visibleLayerNames.indexOf(layerName) > -1 ? 'visible' : 'none')
+      ));
   }
 
 };
@@ -203,23 +185,23 @@ class MapboxSingleTile extends Evented {
   }
 
   setPaintProperty(layer, prop, val){
-    this._style.setPaintProperty(layer, prop, val);
     this._cancelAllPendingRenders();
-    this._style.update([], {transition: false});
+    return this._style.setPaintProperty(layer, prop, val)
+      .then(() => this._style.update([], {transition: false}));
   }
 
   setFilter(layer, filter){
     // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
-    this._style.setFilter(layer, filter);
     this._cancelAllPendingRenders();
-    this._style.update([], {transition: false});
+    return this._style.setFilter(layer, filter)
+      .then(() => this._style.update([], {transition: false}));
   }
 
   // takes an array of layer names to show
   setLayers(visibleLayers){
-    this._style.setLayers(visibleLayers);
     this._cancelAllPendingRenders();
-    this._style.update([], {transition: false});
+    return this._style.setLayers(visibleLayers)
+      .then(() => this._style.update([], {transition: false}));
   }
 
   getSuggestedBufferWidth(zoom){

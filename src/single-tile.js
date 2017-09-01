@@ -279,7 +279,7 @@ class MapboxSingleTile extends Evented {
   }
 
   _invalidateAllLoadedTiles(){
-    // this needs to be called on all changes except zoom & pan
+    // this needs to be called on all changes: style, layers visible, resolution (i.e. zoom)
     // by removing the loadedPromise, we force a fresh load next time the tile
     // is needed...although note that "fresh" is only partial because the rawData
     // is still available.
@@ -432,7 +432,6 @@ class MapboxSingleTile extends Evented {
                 cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
                 srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
 
-
           });
         } // yy
       } // xx
@@ -497,49 +496,37 @@ class MapboxSingleTile extends Evented {
     (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY-1, 0));
     (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY+1, 0));
     
-    // prepare the fake tileCache (we will issue tile load requests in a moment)
+    // prepare the fake tileCache
+    let tilesIn = coords
+      .map(c => ({
+        tile: this._tilesInUse[c.id],
+        coord: c,
+        queryGeometry: [[Point.convert([
+          // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
+          p.pointX + EXTENT*(p.tileX-c.x),  
+          p.pointY + EXTENT*(p.tileY-c.y),
+        ])]],
+        scale: 1
+      }))
+      .filter(x => x.tile && x.tile.hasData()); // we are a bit lazy in terms of ensuring the data matches the rendered styles etc. 
     let sourceCache = Object.create(this._style.sourceCaches.landinsight);
-    let tilesIn = coords.map(c => ({
-      tile: new Tile(c, this._resolution, opts.tileZ),
-      coord: c,
-      queryGeometry: [[Point.convert([
-        // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
-        p.pointX + EXTENT*(p.tileX-c.x),  
-        p.pointY + EXTENT*(p.tileY-c.y),
-      ])]],
-      scale: 1
-    }));
     sourceCache.tilesIn = () => tilesIn;
-    let nTilesPending = coords.length;
-    return new Promise((res, rej) => {     
-      let timer = setTimeout(() => {
-        timer = null;
-        rej("timeout");
-      }, opts.timeoutMS || 1000);
 
-      tilesIn.forEach(t => this._source.loadTile(t.tile, err => {
-        if(--nTilesPending>0 || !timer){
-          return;
-        }
-        clearTimeout(timer);
-
-        let featuresByRenderLayer = QueryFeatures.rendered(
-          sourceCache,
-          layers, 
-          null /* query geometry is pre-specified in tilesIn */, 
-          {circleFudgeExtraPx: 5}, opts.tileZ, 0);
-        
-
-        let featuresBySourceLayer = {};
-        Object.keys(featuresByRenderLayer)
-          .forEach(f => featuresByRenderLayer[f].map(ff => 
-          (featuresBySourceLayer[ff.layer['source-layer']] = featuresBySourceLayer[ff.layer['source-layer']] || [])
-            .push(ff._vectorTileFeature.properties)));
-        
-        res(featuresBySourceLayer);
-
-      }));
-    });
+    let featuresByRenderLayer = QueryFeatures.rendered(
+      sourceCache,
+      layers, 
+      null /* query geometry is pre-specified in tilesIn */, 
+      {circleFudgeExtraPx: 5}, opts.tileZ, 0);
+      
+    let featuresBySourceLayer = {};
+    Object.keys(featuresByRenderLayer)
+      .forEach(renderLayerName => 
+        featuresByRenderLayer[renderLayerName].map(renderLayerFeatures => {
+          let lyr = featuresBySourceLayer[renderLayerFeatures.layer['source-layer']]
+                  = (featuresBySourceLayer[renderLayerFeatures.layer['source-layer']] || []);
+          lyr.push(renderLayerFeatures._vectorTileFeature.properties)
+        }));    
+    return featuresBySourceLayer;
   }
 
   showCanvasForDebug(){

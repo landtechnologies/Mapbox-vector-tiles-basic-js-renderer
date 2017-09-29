@@ -125,10 +125,6 @@ class MapboxSingleTile extends Evented {
     return this._style._source;
   }
 
-  isCurrentConfig(id){
-    return this._configId === id;
-  }
-
   _transformRequest(url, resourceType) {
     return {url: url, headers: {}, credentials: ''};
   }
@@ -195,7 +191,7 @@ class MapboxSingleTile extends Evented {
     return this._style.setPaintProperty(layer, prop, val)
       .then(() => {
         this._style.update([], {transition: false});
-        return configId; // by the time the caller sees this value it may not equal this._configId 
+        return () => this._configId === configId;
       });
   }
 
@@ -206,7 +202,7 @@ class MapboxSingleTile extends Evented {
     return this._style.setFilter(layer, filter)
       .then(() => {
         this._style.update([], {transition: false});
-        return configId; // by the time the caller sees this value it may not equal this._configId 
+        return () => this._configId === configId;
       });
   }
 
@@ -217,7 +213,7 @@ class MapboxSingleTile extends Evented {
     return this._style.setLayers(visibleLayers)
       .then(() => {
         this._style.update([], {transition: false});
-        return configId; // by the time the caller sees this value it may not equal this._configId 
+        return () => this._configId === configId;
       });
   }
 

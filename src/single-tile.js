@@ -118,10 +118,15 @@ class MapboxSingleTile extends Evented {
     this.setResolution(DEFAULT_RESOLUTION, DEFAULT_BUFFER_ZONE_WIDTH);
     this._pendingRenders = {}; // coord.id => render state
     this._tilesInUse = {}; // coord.id => tile (note that tile's have a .uses counter)
+    this._configId = 0; // for use with async config changes..see setXYZ methods below
   }
 
   get _source(){
     return this._style._source;
+  }
+
+  isCurrentConfig(id){
+    return this._configId === id;
   }
 
   _transformRequest(url, resourceType) {
@@ -186,22 +191,34 @@ class MapboxSingleTile extends Evented {
 
   setPaintProperty(layer, prop, val){
     this._cancelAllPendingRenders();
+    let configId = ++this._configId;
     return this._style.setPaintProperty(layer, prop, val)
-      .then(() => this._style.update([], {transition: false}));
+      .then(() => {
+        this._style.update([], {transition: false});
+        return configId; // by the time the caller sees this value it may not equal this._configId 
+      });
   }
 
   setFilter(layer, filter){
     // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
     this._cancelAllPendingRenders();
+    let configId = ++this._configId;
     return this._style.setFilter(layer, filter)
-      .then(() => this._style.update([], {transition: false}));
+      .then(() => {
+        this._style.update([], {transition: false});
+        return configId; // by the time the caller sees this value it may not equal this._configId 
+      });
   }
 
   // takes an array of layer names to show
   setLayers(visibleLayers){
     this._cancelAllPendingRenders();
+    let configId = ++this._configId;
     return this._style.setLayers(visibleLayers)
-      .then(() => this._style.update([], {transition: false}));
+      .then(() => {
+        this._style.update([], {transition: false});
+        return configId; // by the time the caller sees this value it may not equal this._configId 
+      });
   }
 
   getSuggestedBufferWidth(zoom){
@@ -235,6 +252,7 @@ class MapboxSingleTile extends Evented {
     }
     this.painter._filterForZoom = zoom;
     this._cancelAllPendingRenders();
+    return ++this._configId;
   }
 
   setResolution(r, bufferZoneWidth){
@@ -258,6 +276,8 @@ class MapboxSingleTile extends Evented {
       this._debugBufferEl.style.width = this._canvasSizeFull + 'px';
       this._debugBufferEl.style.height = this._canvasSizeFull + 'px';
     } 
+
+    return ++this._configId;
   }
 
   _invalidateAllLoadedTiles(){
@@ -309,7 +329,8 @@ class MapboxSingleTile extends Evented {
     if(!state){
       return; // tile was already rendered
     } 
-     
+    
+    renderRef.callback.func("canceled");
     var idx = state.callbacks.indexOf(renderRef.callback);
     (idx !== -1) && state.callbacks.splice(idx,1); 
     if(state.callbacks.length === 0){

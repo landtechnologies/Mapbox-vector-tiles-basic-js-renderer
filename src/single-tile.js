@@ -387,6 +387,7 @@ class MapboxSingleTile extends Evented {
         return; // render for this tile has been canceled, or superceded.
       }
       this.transform.zoom = z;
+      this.transform.tileZoom = z;
       state.tile.tileSize = this._resolution;
       this._style._currentCoord = state.coord;
       this._style._currentTile = state.tile;

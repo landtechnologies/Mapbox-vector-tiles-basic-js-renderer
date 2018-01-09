@@ -13,7 +13,8 @@ const Painter = require('./render/painter'),
       Point = require('point-geometry'),
       QueryFeatures = require('./source/query_features'),
       SphericalMercator = require('@mapbox/sphericalmercator'),
-      Cache = require('./util/lru_cache');
+      Cache = require('./util/lru_cache'),
+      EvaluationParameters = require('./style/evaluation_parameters');
 
 
 var sphericalMercator = new SphericalMercator();
@@ -28,7 +29,7 @@ var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet
 
 class Style2 extends Style {
   constructor(stylesheet, map, options){
-    super(stylesheet, map, options);
+    super(map, options);
     this._loadedPromise = new Promise(res => 
       this.on('data', e => e.dataType === "style" && res()));
     this._source = {
@@ -37,6 +38,7 @@ class Style2 extends Style {
       unloadTile: (tile) => this._loadedPromise.then(()=>this._source.unloadTile(tile)), 
       abortTile: (tile) => this._loadedPromise.then(()=>this._source.unloadTile(tile))
     };
+    this.loadJSON(stylesheet);
   }
 
   addSource(id, source, options){
@@ -53,10 +55,11 @@ class Style2 extends Style {
       pause: () => {},
       resume: () => {},
       serialize: () => this._source.serialize(),
-      map: { }
+      map: { },
+      prepare: (context) => {
+        Object.values(this._source.map._tilesInUse).forEach(t => t.upload(context));
+      }
     }; 
-    this._loadedPromise
-      .then(() => this._recalculate(16)); // TODO: use proper zoom value (which depends on z at the point we actually render)
   }
 
   setPaintProperty(layer, prop, val){
@@ -110,7 +113,7 @@ class MapboxSingleTile extends Evented {
     this._tileCache = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
-    this._style.on('data', e => (e.dataType === "style") && this._style.update([], {transition: false}));
+    this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false})));
     this._nextRenderId = 0;
     this._canvas = document.createElement('canvas');
     this._canvas.style.imageRendering = 'pixelated';
@@ -118,8 +121,8 @@ class MapboxSingleTile extends Evented {
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
     this._createGlContext();
     this.setResolution(DEFAULT_RESOLUTION, DEFAULT_BUFFER_ZONE_WIDTH);
-    this._pendingRenders = {}; // coord.id => render state
-    this._tilesInUse = {}; // coord.id => tile (note that tile's have a .uses counter)
+    this._pendingRenders = {}; // tileID.key => render state
+    this._tilesInUse = {}; // tileID.key => tile (note that tile's have a .uses counter)
     this._configId = 0; // for use with async config changes..see setXYZ methods below
   }
 
@@ -192,7 +195,7 @@ class MapboxSingleTile extends Evented {
     let configId = ++this._configId;
     return this._style.setPaintProperty(layer, prop, val)
       .then(() => {
-        this._style.update([], {transition: false});
+        this._style.update(new EvaluationParameters(16,{transition: false}));
         return () => this._configId === configId;
       });
   }
@@ -203,7 +206,7 @@ class MapboxSingleTile extends Evented {
     let configId = ++this._configId;
     return this._style.setFilter(layer, filter)
       .then(() => {
-        this._style.update([], {transition: false});
+        this._style.update(new EvaluationParameters(16,{transition: false}));
         return () => this._configId === configId;
       });
   }
@@ -214,7 +217,7 @@ class MapboxSingleTile extends Evented {
     let configId = ++this._configId;
     return this._style.setLayers(visibleLayers)
       .then(() => {
-        this._style.update([], {transition: false});
+        this._style.update(new EvaluationParameters(16,{transition: false}));
         return () => this._configId === configId;
       });
   }
@@ -287,7 +290,7 @@ class MapboxSingleTile extends Evented {
       this._tilesInUse[id].loadedPromise = null;
     }
     this._tileCache.keys().forEach(id => 
-      this._tileCache.getWithoutRemoving(id).loadedPromise = null);
+      this._tileCache.get(id).loadedPromise = null);
   }
 
   _cancelAllPendingRenders(){ 
@@ -308,10 +311,10 @@ class MapboxSingleTile extends Evented {
     if(tile.uses > 0){
       return;
     }
-    delete this._tilesInUse[tile.coord.id];
+    delete this._tilesInUse[tile.tileID.key];
     if(tile.hasData()){
       // this tile is worth keeping...
-      this._tileCache.add(tile.coord.id, tile);
+      this._tileCache.add(tile.tileID.key, tile);
     } else {
       // this tile isn't ready and isn't needed, so abandon it...
       this._source.abortTile(tile);
@@ -320,7 +323,7 @@ class MapboxSingleTile extends Evented {
   }
 
   releaseRender(renderRef, state){
-    this._decrementTileUses(this._tilesInUse[renderRef.coordId]);
+    this._decrementTileUses(this._tilesInUse[renderRef.tileIDKey]);
 
     var state = Object.values(this._pendingRenders)
                       .find(state => state.renderId === renderRef.id);
@@ -345,31 +348,28 @@ class MapboxSingleTile extends Evented {
       ctx: ctx,
       drawImageSpec: drawImageSpec
     };
-    var coord = new OverscaledTileID(z, 0, z, x, y, 0);    
-    var id = coord.id;
+    var tileID = new OverscaledTileID(z, 0, z, x, y, 0);    
+    var id = tileID.key;
     var state = this._pendingRenders[id];
     if(state){
       // this tile is already pending render, so we don't need to do much...
       state.tile.uses++;
       state.callbacks.push(callback);
-      return {id: state.renderId, callback: callback, coordId: id};
+      return {id: state.renderId, callback: callback, tileIDKey: id};
     }
 
     // We need to create a pending render and possibly create & load a new tile...
     var tile = this._tilesInUse[id] ||
-               this._tileCache.get(id) || // note this removes it from the cache if it exists
-               new Tile(coord.wrapped(), this._resolution, z);
+               this._tileCache.getAndRemove(id) || // note this removes it from the cache if it exists
+               new Tile(tileID.wrapped(), this._resolution, z);
     tile.uses++;
     this._tilesInUse[id] = tile;
     var renderId = ++this._nextRenderId;
     state = this._pendingRenders[id] = {
-      id: id,
+      id, tile, tileID, renderId,
       callbacks: [callback],
-      tile: tile,
-      coord: coord,
-      renderId: renderId,
       timeout: setTimeout(() => {
-        delete this._pendingRenders[coord.id];
+        delete this._pendingRenders[tileID.key];
         while(state.callbacks.length){
           state.callbacks.shift().func("timeout");
         }
@@ -391,7 +391,7 @@ class MapboxSingleTile extends Evented {
       this.transform.zoom = z;
       this.transform.tileZoom = z;
       state.tile.tileSize = this._resolution;
-      this._style._currentCoord = state.coord;
+      this._style._currentCoord = state.tileID;
       this._style._currentTile = state.tile;
       for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
         for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
@@ -404,7 +404,7 @@ class MapboxSingleTile extends Evented {
             continue;
           }
 
-          state.coord.posMatrix = this._calculatePosMatrix(xx, yy);
+          state.tileID.posMatrix = this._calculatePosMatrix(xx, yy);
           this.painter.render(this._style, {
             showTileBoundaries: this._initOptions.showTileBoundaries,
             showOverdrawInspector: this._initOptions.showOverdrawInspector
@@ -460,7 +460,7 @@ class MapboxSingleTile extends Evented {
       this._source.unloadTile(state.tile);
     });
 
-    return {id: state.renderId, callback: callback, coordId: id};
+    return {id: state.renderId, callback: callback, tileIDKey: id};
   }
 
   latLngToTileCoords(opts){

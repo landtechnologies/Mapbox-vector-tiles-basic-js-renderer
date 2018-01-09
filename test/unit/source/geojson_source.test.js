@@ -2,7 +2,7 @@
 
 const test = require('mapbox-gl-js-test').test;
 const Tile = require('../../../src/source/tile');
-const TileCoord = require('../../../src/source/tile_coord');
+const OverscaledTileID = require('../../../src/source/tile_id').OverscaledTileID;
 const GeoJSONSource = require('../../../src/source/geojson_source');
 const Transform = require('../../../src/geo/transform');
 const LngLat = require('../../../src/geo/lng_lat');
@@ -49,7 +49,9 @@ test('GeoJSONSource#setData', (t) => {
     function createSource() {
         return new GeoJSONSource('id', {data: {}}, {
             send: function (type, data, callback) {
-                return setTimeout(callback, 0);
+                if (callback) {
+                    return setTimeout(callback, 0);
+                }
             }
         });
     }
@@ -82,7 +84,7 @@ test('GeoJSONSource#onRemove', (t) => {
     t.test('broadcasts "removeSource" event', (t) => {
         const source = new GeoJSONSource('id', {data: {}}, {
             broadcast: function (type, data, callback) {
-                callback();
+                t.false(callback);
                 t.equal(type, 'removeSource');
                 t.deepEqual(data, { type: 'geojson', source: 'id' });
                 t.end();
@@ -153,7 +155,9 @@ test('GeoJSONSource#update', (t) => {
     t.test('fires event when metadata loads', (t) => {
         const mockDispatcher = {
             send: function(message, args, callback) {
-                setTimeout(callback, 0);
+                if (callback) {
+                    setTimeout(callback, 0);
+                }
             }
         };
 
@@ -169,7 +173,9 @@ test('GeoJSONSource#update', (t) => {
     t.test('fires "error"', (t) => {
         const mockDispatcher = {
             send: function(message, args, callback) {
-                setTimeout(callback.bind(null, 'error'), 0);
+                if (callback) {
+                    setTimeout(callback.bind(null, 'error'), 0);
+                }
             }
         };
 
@@ -190,19 +196,21 @@ test('GeoJSONSource#update', (t) => {
                 if (message === 'geojson.loadData' && --expectedLoadDataCalls <= 0) {
                     t.end();
                 }
-                setTimeout(callback, 0);
+                if (callback) {
+                    setTimeout(callback, 0);
+                }
             }
         };
 
         const source = new GeoJSONSource('id', {data: {}}, mockDispatcher);
         source.map = {
-            transform: { cameraToCenterDistance: 1, cameraToTileDistance: () => { return 1; } }
+            transform: {}
         };
 
         source.on('data', (e) => {
             if (e.sourceDataType === 'metadata') {
                 source.setData({});
-                source.loadTile(new Tile(new TileCoord(0, 0, 0), 512), () => {});
+                source.loadTile(new Tile(new OverscaledTileID(0, 0, 0, 0, 0), 512), () => {});
             }
         });
 

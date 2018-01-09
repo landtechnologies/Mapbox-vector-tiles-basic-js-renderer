@@ -3,7 +3,7 @@
 // readFileSync calls must be written out long-form for brfs.
 /* eslint-disable prefer-template, no-path-concat */
 
-module.exports = {
+const shaders: {[string]: {fragmentSource: string, vertexSource: string}} = {
     prelude: {
         fragmentSource: require('./_prelude.fragment.glsl'),
         vertexSource: require( './_prelude.vertex.glsl')
@@ -12,9 +12,21 @@ module.exports = {
         fragmentSource: require('./circle.fragment.glsl'),
         vertexSource: require('./circle.vertex.glsl')
     },
+    heatmap: {
+        fragmentSource: require('./heatmap.fragment.glsl'),
+        vertexSource: require('./heatmap.vertex.glsl')
+    },
+    heatmapTexture: {
+        fragmentSource: require('./heatmap_texture.fragment.glsl'),
+        vertexSource: require('./heatmap_texture.vertex.glsl')
+    },
     collisionBox: {
         fragmentSource: require('./collision_box.fragment.glsl'),
         vertexSource: require('./collision_box.vertex.glsl')
+    },
+    collisionCircle: {
+        fragmentSource: require('./collision_circle.fragment.glsl'),
+        vertexSource: require('./collision_circle.vertex.glsl')
     },
     debug: {
         fragmentSource: require('./debug.fragment.glsl'),
@@ -48,6 +60,14 @@ module.exports = {
         fragmentSource: require('./extrusion_texture.fragment.glsl'),
         vertexSource: require('./extrusion_texture.vertex.glsl')
     },
+    hillshadePrepare: {
+        fragmentSource: require('./hillshade_prepare.fragment.glsl'),
+        vertexSource: require('./hillshade_prepare.vertex.glsl')
+    },
+    hillshade: {
+        fragmentSource: require('./hillshade.fragment.glsl'),
+        vertexSource: require('./hillshade.vertex.glsl')
+    },
     line: {
         fragmentSource: require('./line.fragment.glsl'),
         vertexSource: require('./line.vertex.glsl')
@@ -78,11 +98,11 @@ module.exports = {
 
 const re = /#pragma mapbox: ([\w]+) ([\w]+) ([\w]+) ([\w]+)/g;
 
-for (const programName in module.exports) {
-    const program = module.exports[programName];
-    const fragmentPragmas = {};
+for (const programName in shaders) {
+    const program = shaders[programName];
+    const fragmentPragmas: {[string]: boolean} = {};
 
-    program.fragmentSource = program.fragmentSource.replace(re, (match, operation, precision, type, name) => {
+    program.fragmentSource = program.fragmentSource.replace(re, (match: string, operation: string, precision: string, type: string, name: string) => {
         fragmentPragmas[name] = true;
         if (operation === 'define') {
             return `
@@ -92,7 +112,7 @@ varying ${precision} ${type} ${name};
 uniform ${precision} ${type} u_${name};
 #endif
 `;
-        } else if (operation === 'initialize') {
+        } else /* if (operation === 'initialize') */ {
             return `
 #ifdef HAS_UNIFORM_u_${name}
     ${precision} ${type} ${name} = u_${name};
@@ -101,7 +121,7 @@ uniform ${precision} ${type} u_${name};
         }
     });
 
-    program.vertexSource = program.vertexSource.replace(re, (match, operation, precision, type, name) => {
+    program.vertexSource = program.vertexSource.replace(re, (match: string, operation: string, precision: string, type: string, name: string) => {
         const attrType = type === 'float' ? 'vec2' : 'vec4';
         if (fragmentPragmas[name]) {
             if (operation === 'define') {
@@ -114,7 +134,7 @@ varying ${precision} ${type} ${name};
 uniform ${precision} ${type} u_${name};
 #endif
 `;
-            } else if (operation === 'initialize') {
+            } else /* if (operation === 'initialize') */ {
                 return `
 #ifndef HAS_UNIFORM_u_${name}
     ${name} = unpack_mix_${attrType}(a_${name}, a_${name}_t);
@@ -133,7 +153,7 @@ attribute ${precision} ${attrType} a_${name};
 uniform ${precision} ${type} u_${name};
 #endif
 `;
-            } else if (operation === 'initialize') {
+            } else /* if (operation === 'initialize') */ {
                 return `
 #ifndef HAS_UNIFORM_u_${name}
     ${precision} ${type} ${name} = unpack_mix_${attrType}(a_${name}, a_${name}_t);
@@ -145,3 +165,5 @@ uniform ${precision} ${type} u_${name};
         }
     });
 }
+
+module.exports = shaders;

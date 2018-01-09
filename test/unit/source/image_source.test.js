@@ -6,6 +6,7 @@ const Evented = require('../../../src/util/evented');
 const Transform = require('../../../src/geo/transform');
 const util = require('../../../src/util/util');
 const ajax = require('../../../src/util/ajax');
+const browser = require('../../../src/util/browser');
 
 function createSource(options) {
     options = util.extend({
@@ -29,7 +30,8 @@ class StubMap extends Evented {
 
 test('ImageSource', (t) => {
 
-    t.stub(ajax, 'getImage').callsFake((params, callback) => { callback(null, new ArrayBuffer(1)); });
+    t.stub(ajax, 'getImage').callsFake((params, callback) => callback(null, {}));
+    t.stub(browser, 'getImageData').callsFake(() => new ArrayBuffer(1));
 
     t.test('constructor', (t) => {
         const source = createSource({ url : '/image.png' });
@@ -64,7 +66,7 @@ test('ImageSource', (t) => {
         const source = createSource({ url : '/image.png' });
         source.on('data', (e) => {
             if (e.dataType === 'source' && e.sourceDataType === 'content') {
-                t.ok(typeof source.coord == 'object');
+                t.ok(typeof source.tileID == 'object');
                 t.end();
             }
         });
@@ -86,7 +88,7 @@ test('ImageSource', (t) => {
 
         const serialized = source.serialize();
         t.equal(serialized.type, 'image');
-        t.equal(serialized.urls, '/image.png');
+        t.equal(serialized.url, '/image.png');
         t.deepEqual(serialized.coordinates, [[0, 0], [1, 0], [1, 1], [0, 1]]);
 
         t.end();

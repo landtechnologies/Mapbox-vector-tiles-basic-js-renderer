@@ -1,7 +1,5 @@
 // @flow
 
-const TileCoord = require('./tile_coord');
-
 import type SourceCache from './source_cache';
 import type StyleLayer from '../style/style_layer';
 import type Coordinate from '../geo/coordinate';
@@ -9,7 +7,7 @@ import type Coordinate from '../geo/coordinate';
 exports.rendered = function(sourceCache: SourceCache,
                             styleLayers: {[string]: StyleLayer},
                             queryGeometry: Array<Coordinate>,
-                            params: { filter: any, layers: Array<string> },
+                            params: { filter: FilterSpecification, layers: Array<string> },
                             zoom: number,
                             bearing: number) {
     const tilesIn = sourceCache.tilesIn(queryGeometry);
@@ -17,21 +15,19 @@ exports.rendered = function(sourceCache: SourceCache,
     tilesIn.sort(sortTilesIn);
 
     const renderedFeatureLayers = [];
-    for (let r = 0; r < tilesIn.length; r++) {
-        const tileIn = tilesIn[r];
-        const featureIndex = tileIn.tile.featureIndex;
-        if (!featureIndex) continue;
-
+    for (const tileIn of tilesIn) {
         renderedFeatureLayers.push({
-            wrappedTileID: tileIn.coord.wrapped().id,
-            queryResults: featureIndex.query({
-                queryGeometry: tileIn.queryGeometry,
-                scale: tileIn.scale,
-                tileSize: tileIn.tile.tileSize,
-                bearing: bearing,
-                params: params
-            }, styleLayers)});
+            wrappedTileID: tileIn.tileID.wrapped().key,
+            queryResults: tileIn.tile.queryRenderedFeatures(
+                styleLayers,
+                tileIn.queryGeometry,
+                tileIn.scale,
+                params,
+                bearing,
+                sourceCache.id)
+        });
     }
+
     return mergeRenderedFeatureLayers(renderedFeatureLayers);
 };
 
@@ -45,7 +41,7 @@ exports.source = function(sourceCache: SourceCache, params: any) {
     const dataTiles = {};
     for (let i = 0; i < tiles.length; i++) {
         const tile = tiles[i];
-        const dataID = new TileCoord(Math.min(tile.sourceMaxZoom, tile.coord.z), tile.coord.x, tile.coord.y, 0).id;
+        const dataID = tile.tileID.canonical.key;
         if (!dataTiles[dataID]) {
             dataTiles[dataID] = true;
             tile.querySourceFeatures(result, params);
@@ -56,9 +52,9 @@ exports.source = function(sourceCache: SourceCache, params: any) {
 };
 
 function sortTilesIn(a, b) {
-    const coordA = a.coord;
-    const coordB = b.coord;
-    return (coordA.z - coordB.z) || (coordA.y - coordB.y) || (coordA.w - coordB.w) || (coordA.x - coordB.x);
+    const idA = a.tileID;
+    const idB = b.tileID;
+    return (idA.overscaledZ - idB.overscaledZ) || (idA.canonical.y - idB.canonical.y) || (idA.wrap - idB.wrap) || (idA.canonical.x - idB.canonical.x);
 }
 
 function mergeRenderedFeatureLayers(tiles) {

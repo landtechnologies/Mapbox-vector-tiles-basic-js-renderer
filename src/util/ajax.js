@@ -2,6 +2,8 @@
 
 const window = require('./window');
 
+import type { Callback } from '../types/callback';
+
 /**
  * The type of a resource.
  * @private
@@ -34,7 +36,7 @@ if (typeof Object.freeze == 'function') {
 export type RequestParameters = {
     url: string,
     headers?: Object,
-    credentials? : 'same-origin' | 'include'
+    credentials?: 'same-origin' | 'include'
 };
 
 class AJAXError extends Error {
@@ -45,7 +47,7 @@ class AJAXError extends Error {
     }
 }
 
-function makeRequest(requestParameters: RequestParameters) : XMLHttpRequest {
+function makeRequest(requestParameters: RequestParameters): XMLHttpRequest {
     const xhr: XMLHttpRequest = new window.XMLHttpRequest();
 
     xhr.open('GET', requestParameters.url, true);
@@ -126,8 +128,8 @@ exports.getImage = function(requestParameters: RequestParameters, callback: Call
                 URL.revokeObjectURL(img.src);
             };
             const blob: Blob = new window.Blob([new Uint8Array(imgData.data)], { type: 'image/png' });
-            (img : any).cacheControl = imgData.cacheControl;
-            (img : any).expires = imgData.expires;
+            (img: any).cacheControl = imgData.cacheControl;
+            (img: any).expires = imgData.expires;
             img.src = imgData.data.byteLength ? URL.createObjectURL(blob) : transparentPngUrl;
         }
     });

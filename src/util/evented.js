@@ -39,7 +39,7 @@ class Evented {
      *   extended with `target` and `type` properties.
      * @returns {Object} `this`
      */
-    on(type: string, listener: Listener) {
+    on(type: *, listener: Listener): this {
         this._listeners = this._listeners || {};
         _addEventListener(type, listener, this._listeners);
 
@@ -53,7 +53,7 @@ class Evented {
      * @param {Function} listener The listener function to remove.
      * @returns {Object} `this`
      */
-    off(type: string, listener: Listener) {
+    off(type: *, listener: Listener) {
         _removeEventListener(type, listener, this._listeners);
         _removeEventListener(type, listener, this._oneTimeListeners);
 
@@ -83,22 +83,20 @@ class Evented {
      * @param {Object} [data] Data to be passed to any listeners.
      * @returns {Object} `this`
      */
-    fire(type: string, data: Object) {
+    fire(type: string, data?: Object) {
         if (this.listens(type)) {
             data = util.extend({}, data, {type: type, target: this});
 
             // make sure adding or removing listeners inside other listeners won't cause an infinite loop
             const listeners = this._listeners && this._listeners[type] ? this._listeners[type].slice() : [];
-
-            for (let i = 0; i < listeners.length; i++) {
-                listeners[i].call(this, data);
+            for (const listener of listeners) {
+                listener.call(this, data);
             }
 
             const oneTimeListeners = this._oneTimeListeners && this._oneTimeListeners[type] ? this._oneTimeListeners[type].slice() : [];
-
-            for (let i = 0; i < oneTimeListeners.length; i++) {
-                oneTimeListeners[i].call(this, data);
-                _removeEventListener(type, oneTimeListeners[i], this._oneTimeListeners);
+            for (const listener of oneTimeListeners) {
+                _removeEventListener(type, listener, this._oneTimeListeners);
+                listener.call(this, data);
             }
 
             if (this._eventedParent) {

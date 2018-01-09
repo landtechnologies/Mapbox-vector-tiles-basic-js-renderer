@@ -111,6 +111,113 @@ t('diff', (t) => {
         { command: 'addSource', args: ['foo', 1] }
     ], 'add a source');
 
+    t.deepEqual(diffStyles({
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            }
+        }
+    }, {
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: [{
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [10, 20] }
+                    }]
+                }
+            }
+        }
+    }), [
+        { command: 'setGeoJSONSourceData', args: ['foo', {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [10, 20] }
+            }]
+        }]}
+    ], 'update a geojson source');
+
+    t.deepEqual(diffStyles({
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            }
+        }
+    }, {
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] },
+                cluster: true
+            }
+        }
+    }), [
+        { command: 'removeSource', args: ['foo'] },
+        { command: 'addSource', args: ['foo', {
+            type: 'geojson',
+            cluster: true,
+            data: { type: 'FeatureCollection', features: [] }
+        }]}
+    ], 'remove and re-add a source if cluster changes');
+
+    t.deepEqual(diffStyles({
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] },
+                cluster: true
+            }
+        }
+    }, {
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] },
+                cluster: true,
+                clusterRadius: 100
+            }
+        }
+    }), [
+        { command: 'removeSource', args: ['foo'] },
+        { command: 'addSource', args: ['foo', {
+            type: 'geojson',
+            cluster: true,
+            clusterRadius: 100,
+            data: { type: 'FeatureCollection', features: [] }
+        }]}
+    ], 'remove and re-add a source if cluster radius changes');
+
+    t.deepEqual(diffStyles({
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] },
+                cluster: true,
+                clusterRadius: 100
+            }
+        }
+    }, {
+        sources: {
+            foo: {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] },
+                cluster: true
+            }
+        }
+    }), [
+        { command: 'removeSource', args: ['foo'] },
+        { command: 'addSource', args: ['foo', {
+            type: 'geojson',
+            cluster: true,
+            data: { type: 'FeatureCollection', features: [] }
+        }]}
+    ], 'remove and re-add a source if cluster radius changes (before and after swapped)');
+
     t.deepEqual(diffStyles({}, {
         metadata: { 'mapbox:author': 'nobody' }
     }), [], 'ignore style metadata');

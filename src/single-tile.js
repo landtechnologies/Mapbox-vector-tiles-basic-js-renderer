@@ -1,18 +1,20 @@
 // For info on usage, development and debugging,
 // see https://docs.google.com/a/landtech.co/document/d/1eB2oH3d7mpDfK8gxTiYphxPgBM7EDu5MeUNKrQwYIrQ/
 
+
 const Painter = require('./render/painter'),
       Style = require('./style/style'),
       EXTENT = require('./data/extent'),
       Evented = require('./util/evented'),
-      TileCoord = require('./source/tile_coord'),
-      mat4 = require('@mapbox/gl-matrix').mat4,
+      {OverscaledTileID} = require('./source/tile_id'),
+      {mat4} = require('@mapbox/gl-matrix'),
       Source = require('./source/source'),
       Tile = require('./source/tile'),
       Point = require('point-geometry'),
       QueryFeatures = require('./source/query_features'),
       SphericalMercator = require('@mapbox/sphericalmercator'),
       Cache = require('./util/lru_cache');
+
 
 var sphericalMercator = new SphericalMercator();
 
@@ -83,7 +85,7 @@ class Painter2 extends Painter {
     this._filterForZoom = 15;
   }
   resize(width, height) {
-    const gl = this.gl;
+    const gl = this.context.gl;
     this.width = width;
     this.height = height;
     gl.viewport(0, 0, this.width, this.height);
@@ -343,7 +345,7 @@ class MapboxSingleTile extends Evented {
       ctx: ctx,
       drawImageSpec: drawImageSpec
     };
-    var coord = new TileCoord(z, x, y, 0);    
+    var coord = new OverscaledTileID(z, 0, z, x, y, 0);    
     var id = coord.id;
     var state = this._pendingRenders[id];
     if(state){
@@ -484,17 +486,17 @@ class MapboxSingleTile extends Evented {
     // collect the coordinates of the tile containing the given point, plus any with an overlapping buffer region
     let coords = []; 
     let bufferSize = this._bufferZoneWidth/this._resolution * EXTENT; // measured in the same units as pointXY
-    coords.push(new TileCoord(p.tileZ, p.tileX, p.tileY, 0));
+    coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY, 0));
     // consider including the left, right, top, bottom adjacent tiles (if the point is near to the given edge)
-    (p.pointX<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX-1, p.tileY, 0));
-    (p.pointX>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY, 0));
-    (p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX, p.tileY-1, 0));
-    (p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX, p.tileY+1, 0));
+    (p.pointX<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY, 0));
+    (p.pointX>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY, 0));
+    (p.pointY<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY-1, 0));
+    (p.pointY>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY+1, 0));
     // and consider including the 4 corner adjacent tiles (again, if the point is near the given corner)
-    (p.pointX<bufferSize && p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX-1, p.tileY-1, 0));
-    (p.pointX<bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX-1, p.tileY+1, 0));
-    (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY-1, 0));
-    (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new TileCoord(p.tileZ, p.tileX+1, p.tileY+1, 0));
+    (p.pointX<bufferSize && p.pointY<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY-1, 0));
+    (p.pointX<bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY+1, 0));
+    (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY-1, 0));
+    (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY+1, 0));
     
     // prepare the fake tileCache
     let tilesIn = coords

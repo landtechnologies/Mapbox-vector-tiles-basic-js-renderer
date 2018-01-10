@@ -113,7 +113,7 @@ class MapboxSingleTile extends Evented {
     this._tileCache = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
-    this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false})));
+    this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0})));
     this._nextRenderId = 0;
     this._canvas = document.createElement('canvas');
     this._canvas.style.imageRendering = 'pixelated';
@@ -195,7 +195,7 @@ class MapboxSingleTile extends Evented {
     let configId = ++this._configId;
     return this._style.setPaintProperty(layer, prop, val)
       .then(() => {
-        this._style.update(new EvaluationParameters(16,{transition: false}));
+        this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
         return () => this._configId === configId;
       });
   }
@@ -206,18 +206,18 @@ class MapboxSingleTile extends Evented {
     let configId = ++this._configId;
     return this._style.setFilter(layer, filter)
       .then(() => {
-        this._style.update(new EvaluationParameters(16,{transition: false}));
+        this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
         return () => this._configId === configId;
       });
   }
-
+ 
   // takes an array of layer names to show
   setLayers(visibleLayers){
     this._cancelAllPendingRenders();
     let configId = ++this._configId;
     return this._style.setLayers(visibleLayers)
       .then(() => {
-        this._style.update(new EvaluationParameters(16,{transition: false}));
+        this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
         return () => this._configId === configId;
       });
   }
@@ -484,29 +484,29 @@ class MapboxSingleTile extends Evented {
     let p = this.latLngToTileCoords(Object.assign({extent: EXTENT}, opts));
 
     // collect the coordinates of the tile containing the given point, plus any with an overlapping buffer region
-    let coords = []; 
+    let tileIDs = []; 
     let bufferSize = this._bufferZoneWidth/this._resolution * EXTENT; // measured in the same units as pointXY
-    coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY, 0));
+    tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY, 0));
     // consider including the left, right, top, bottom adjacent tiles (if the point is near to the given edge)
-    (p.pointX<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY, 0));
-    (p.pointX>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY, 0));
-    (p.pointY<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY-1, 0));
-    (p.pointY>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY+1, 0));
+    (p.pointX<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY, 0));
+    (p.pointX>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY, 0));
+    (p.pointY<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY-1, 0));
+    (p.pointY>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY+1, 0));
     // and consider including the 4 corner adjacent tiles (again, if the point is near the given corner)
-    (p.pointX<bufferSize && p.pointY<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY-1, 0));
-    (p.pointX<bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY+1, 0));
-    (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY-1, 0));
-    (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && coords.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY+1, 0));
+    (p.pointX<bufferSize && p.pointY<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY-1, 0));
+    (p.pointX<bufferSize && p.pointY>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY+1, 0));
+    (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY-1, 0));
+    (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY+1, 0));
     
     // prepare the fake tileCache
-    let tilesIn = coords
+    let tilesIn = tileIDs
       .map(c => ({
-        tile: this._tilesInUse[c.id],
-        coord: c,
+        tile: this._tilesInUse[c.key],
+        tileID: c,
         queryGeometry: [[Point.convert([
           // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
-          p.pointX + EXTENT*(p.tileX-c.x),  
-          p.pointY + EXTENT*(p.tileY-c.y),
+          p.pointX + EXTENT*(p.tileX-c.canonical.x),  
+          p.pointY + EXTENT*(p.tileY-c.canonical.y),
         ])]],
         scale: 1
       }))
@@ -518,7 +518,7 @@ class MapboxSingleTile extends Evented {
       sourceCache,
       layers, 
       null /* query geometry is pre-specified in tilesIn */, 
-      {circleFudgeExtraPx: 5}, opts.tileZ, 0);
+      {}, opts.tileZ, 0);
       
     let featuresBySourceLayer = {};
     Object.keys(featuresByRenderLayer)

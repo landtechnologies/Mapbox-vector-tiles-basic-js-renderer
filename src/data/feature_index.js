@@ -121,13 +121,13 @@ class FeatureIndex {
 
         const matching = this.grid.query(minX - additionalRadius, minY - additionalRadius, maxX + additionalRadius, maxY + additionalRadius);
         matching.sort(topDownFeatureComparator);
-        this.filterMatching(result, matching, this.featureIndexArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits, params.circleFudgeExtraPx);
+        this.filterMatching(result, matching, this.featureIndexArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits);
 
         const matchingSymbols = this.collisionIndex ?
             this.collisionIndex.queryRenderedSymbols(queryGeometry, this.tileID, EXTENT / args.tileSize, args.collisionBoxArray, args.sourceID) :
             [];
         matchingSymbols.sort();
-        this.filterMatching(result, matchingSymbols, args.collisionBoxArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits, params.circleFudgeExtraPx);
+        this.filterMatching(result, matchingSymbols, args.collisionBoxArray, queryGeometry, filter, params.layers, styleLayers, args.bearing, pixelsToTileUnits);
 
         return result;
     }
@@ -141,8 +141,7 @@ class FeatureIndex {
         filterLayerIDs: Array<string>,
         styleLayers: {[string]: StyleLayer},
         bearing: number,
-        pixelsToTileUnits: number,
-        circleFudgeExtraPx: number
+        pixelsToTileUnits: number
     ) {
         let previousIndex;
         for (let k = 0; k < matching.length; k++) {
@@ -180,7 +179,7 @@ class FeatureIndex {
                     if (!geometry) {
                         geometry = loadGeometry(feature);
                     }
-                    if (!styleLayer.queryIntersectsFeature(queryGeometry, feature, geometry, this.z, bearing, pixelsToTileUnits)) { // what about circleFudgeExtraPx?
+                    if (!styleLayer.queryIntersectsFeature(queryGeometry, feature, geometry, this.z, bearing, pixelsToTileUnits)) {
                         continue;
                     }
                 }

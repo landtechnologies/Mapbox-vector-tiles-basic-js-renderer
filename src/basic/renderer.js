@@ -1,23 +1,19 @@
-// For info on usage, development and debugging,
-// see https://docs.google.com/a/landtech.co/document/d/1eB2oH3d7mpDfK8gxTiYphxPgBM7EDu5MeUNKrQwYIrQ/
-
-
-const Painter = require('./render/painter'),
-      Style = require('./style/style'),
-      EXTENT = require('./data/extent'),
-      Evented = require('./util/evented'),
-      {OverscaledTileID} = require('./source/tile_id'),
+const BasicPainter = require('./painter'),
+      BasicStyle = require('./style'),
+      EXTENT = require('../data/extent'),
+      Evented = require('../util/evented'),
+      {OverscaledTileID} = require('../source/tile_id'),
       {mat4} = require('@mapbox/gl-matrix'),
-      Source = require('./source/source'),
-      Tile = require('./source/tile'),
+      Source = require('../source/source'),
+      Tile = require('../source/tile'),
       Point = require('point-geometry'),
-      QueryFeatures = require('./source/query_features'),
+      QueryFeatures = require('../source/query_features'),
       SphericalMercator = require('@mapbox/sphericalmercator'),
-      Cache = require('./util/lru_cache'),
-      EvaluationParameters = require('./style/evaluation_parameters'),
-      Placement = require('./symbol/placement');
+      Cache = require('../util/lru_cache'),
+      EvaluationParameters = require('../style/evaluation_parameters'),
+      Placement = require('../symbol/placement');
 
-
+window.BasicStyle = BasicStyle;
 var sphericalMercator = new SphericalMercator();
 
 const DEFAULT_RESOLUTION = 256;
@@ -28,83 +24,8 @@ const DEFAULT_BUFFER_ZONE_WIDTH = 0;
 
 var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
 
-class Style2 extends Style {
-  constructor(stylesheet, map, options){
-    super(map, options);
-    this._loadedPromise = new Promise(res => 
-      this.on('data', e => e.dataType === "style" && res()));
-    this._loadedPromise.then(()=>this.placement = new Placement(map.transform, 0));
-    this._source = {
-      isDummy: true,
-      loadTile: (tile, cb) => this._loadedPromise.then(()=>this._source.loadTile(tile, cb)),
-      unloadTile: (tile) => this._loadedPromise.then(()=>this._source.unloadTile(tile)), 
-      abortTile: (tile) => this._loadedPromise.then(()=>this._source.unloadTile(tile))
-    };
-    this.loadJSON(stylesheet);
-  }
 
-  addSource(id, source, options){
-    console.assert(!this._source || this._source.isDummy, "can only load one source");
-    this._source = Source.create(id, source, this.dispatcher, this);
-    this._source.tiles = source.tiles;
-    this._source.map = this.map;
-    this._source.setEventedParent(this, {source: this._source});
-    this.sourceCaches[id] = {
-      getSource: () => this._source,
-      getVisibleCoordinates: () => [this._currentCoord],
-      getTile: () => this._currentTile,
-      reload: () => {},
-      pause: () => {},
-      resume: () => {},
-      serialize: () => this._source.serialize(),
-      map: { },
-      prepare: (context) => {
-        Object.values(this._source.map._tilesInUse).forEach(t => t.upload(context));
-      }
-    }; 
-  }
-
-  setPaintProperty(layer, prop, val){
-    return this._loadedPromise.then(() => super.setPaintProperty(layer, prop, val));      
-  }
-
-  setFilter(layer, filter){
-    return this._loadedPromise.then(() => super.setFilter(layer, filter));   
-  }
-
-  setLayers(visibleLayerNames){
-    // Note this is not part of mapbox style, but handy to put it here for use with pending-style    
-    return this._loadedPromise
-      .then(() => Object.keys(this._layers)
-        .forEach(layerName => 
-        this.setLayoutProperty(layerName, 'visibility', 
-          visibleLayerNames.indexOf(layerName) > -1 ? 'visible' : 'none')
-      ));
-  }
-
-};
-
-class Painter2 extends Painter {
-  constructor(gl, transform){
-    super(gl, transform);
-    this._filterForZoom = 15;
-  }
-  resize(width, height) {
-    const gl = this.context.gl;
-    this.width = width;
-    this.height = height;
-    gl.viewport(0, 0, this.width, this.height);
-  }
-  renderLayer(painter, sourceCache, layer, coords) {
-    let layerStylesheet = layerStylesheetFromLayer(layer);
-    if (layerStylesheet && layerStylesheet.minzoom_ && this._filterForZoom < layerStylesheet.minzoom_) return;
-    if (layerStylesheet && layerStylesheet.maxzoom_ && this._filterForZoom >= layerStylesheet.maxzoom_) return;
-    super.renderLayer(painter, sourceCache, layer, coords);
-  }
-  enableTileClippingMask(){ }
-};
-
-class MapboxSingleTile extends Evented {
+class MapboxBasicRenderer extends Evented {
 
   constructor(options) {
     super();
@@ -113,7 +34,7 @@ class MapboxSingleTile extends Evented {
       zoom: 0, angle: 0, pitch: 0, _pitch: 0, scaleZoom: ()=> 0,
       cameraToCenterDistance: 1, cameraToTileDistance: () => 1 , clone: () => this.transform};
     this._tileCache = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
-    this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
+    this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0})));
     this._nextRenderId = 0;
@@ -188,7 +109,7 @@ class MapboxSingleTile extends Evented {
     if (!this._gl) {
       throw new Error('Failed to initialize WebGL');
     }
-    this.painter = new Painter2(this._gl, this.transform);
+    this.painter = new BasicPainter(this._gl, this.transform);
     this.painter.style = this._style;
   }
 
@@ -549,4 +470,4 @@ class MapboxSingleTile extends Evented {
 
 }
 
-export default MapboxSingleTile;
+module.exports =  MapboxBasicRenderer;

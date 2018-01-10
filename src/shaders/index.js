@@ -8,9 +8,21 @@ const shaders: {[string]: {fragmentSource: string, vertexSource: string}} = {
         fragmentSource: require('./_prelude.fragment.glsl'),
         vertexSource: require( './_prelude.vertex.glsl')
     },
+    background: {
+        fragmentSource: fs.readFileSync(__dirname + '/../shaders/background.fragment.glsl', 'utf8'),
+        vertexSource: fs.readFileSync(__dirname + '/../shaders/background.vertex.glsl', 'utf8')
+    },
+    backgroundPattern: {
+        fragmentSource: fs.readFileSync(__dirname + '/../shaders/background_pattern.fragment.glsl', 'utf8'),
+        vertexSource: fs.readFileSync(__dirname + '/../shaders/background_pattern.vertex.glsl', 'utf8')
+    },
     circle: {
         fragmentSource: require('./circle.fragment.glsl'),
         vertexSource: require('./circle.vertex.glsl')
+    },
+    clippingMask: {
+        fragmentSource: fs.readFileSync(__dirname + '/../shaders/clipping_mask.fragment.glsl', 'utf8'),
+        vertexSource: fs.readFileSync(__dirname + '/../shaders/clipping_mask.vertex.glsl', 'utf8')
     },
     heatmap: {
         fragmentSource: require('./heatmap.fragment.glsl'),

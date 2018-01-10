@@ -14,7 +14,8 @@ const Painter = require('./render/painter'),
       QueryFeatures = require('./source/query_features'),
       SphericalMercator = require('@mapbox/sphericalmercator'),
       Cache = require('./util/lru_cache'),
-      EvaluationParameters = require('./style/evaluation_parameters');
+      EvaluationParameters = require('./style/evaluation_parameters'),
+      Placement = require('./symbol/placement');
 
 
 var sphericalMercator = new SphericalMercator();
@@ -32,6 +33,7 @@ class Style2 extends Style {
     super(map, options);
     this._loadedPromise = new Promise(res => 
       this.on('data', e => e.dataType === "style" && res()));
+    this._loadedPromise.then(()=>this.placement = new Placement(map.transform, 0));
     this._source = {
       isDummy: true,
       loadTile: (tile, cb) => this._loadedPromise.then(()=>this._source.loadTile(tile, cb)),
@@ -109,7 +111,7 @@ class MapboxSingleTile extends Evented {
     this._initOptions = options = options || {}; 
     this.transform = {
       zoom: 0, angle: 0, pitch: 0, _pitch: 0, scaleZoom: ()=> 0,
-      cameraToCenterDistance: 1, cameraToTileDistance: () => 1 };
+      cameraToCenterDistance: 1, cameraToTileDistance: () => 1 , clone: () => this.transform};
     this._tileCache = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
     this._style = new Style2(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});

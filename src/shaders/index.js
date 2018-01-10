@@ -9,20 +9,20 @@ const shaders: {[string]: {fragmentSource: string, vertexSource: string}} = {
         vertexSource: require( './_prelude.vertex.glsl')
     },
     background: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/background.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/background.vertex.glsl', 'utf8')
+        fragmentSource: require('./background.fragment.glsl'),
+        vertexSource: require('./background.vertex.glsl')
     },
     backgroundPattern: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/background_pattern.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/background_pattern.vertex.glsl', 'utf8')
+        fragmentSource: require('./background_pattern.fragment.glsl'),
+        vertexSource: require('./background_pattern.vertex.glsl')
     },
     circle: {
         fragmentSource: require('./circle.fragment.glsl'),
         vertexSource: require('./circle.vertex.glsl')
     },
     clippingMask: {
-        fragmentSource: fs.readFileSync(__dirname + '/../shaders/clipping_mask.fragment.glsl', 'utf8'),
-        vertexSource: fs.readFileSync(__dirname + '/../shaders/clipping_mask.vertex.glsl', 'utf8')
+        fragmentSource: require('./clipping_mask.fragment.glsl'),
+        vertexSource: require('./clipping_mask.vertex.glsl')
     },
     heatmap: {
         fragmentSource: require('./heatmap.fragment.glsl'),

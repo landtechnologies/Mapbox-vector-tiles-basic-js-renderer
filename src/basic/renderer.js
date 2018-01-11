@@ -43,7 +43,8 @@ class MapboxBasicRenderer extends Evented {
       clone: () => this.transform,
       width: OFFSCREEN_CANV_SIZE,
       height: OFFSCREEN_CANV_SIZE,
-      pixelsToGLUnits: [2 / OFFSCREEN_CANV_SIZE, -2 / OFFSCREEN_CANV_SIZE]
+      pixelsToGLUnits: [2 / OFFSCREEN_CANV_SIZE, -2 / OFFSCREEN_CANV_SIZE],
+      tileZoom(tile) => tile.tileID.canonical.z 
     };
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
@@ -53,6 +54,8 @@ class MapboxBasicRenderer extends Evented {
     this._pendingRenders = new Map(); // tileSetID => render state
     this._nextRenderId = 0; // each new render state created has a unique renderId in addition to its tileSetID, which isn't unique
     this._configId = 0; // for use with async config changes..see setXYZ methods below
+    
+    this.showCanvasForDebug();
   }
 
   _transformRequest(url, resourceType) {
@@ -235,7 +238,7 @@ class MapboxBasicRenderer extends Evented {
       renderId, 
       tiles: tilesSpec.map(spec => {
         let tileID = new OverscaledTileID(spec.z, 0, spec.z, spec.x, spec.y, 0);
-        return this._style.sourceCaches[spec.source].getTile(tileID.key); // includes .uses++
+        return this._style.sourceCaches[spec.source].acquireTile(tileID, spec.size); // includes .uses++
       }),
       consumers: [consumer],
       timeout: setTimeout(() => this._finishRender(tileSetID, renderId, "timeout"), TILE_LOAD_TIMEOUT) // might want to do this per-tile in the sourceCache
@@ -253,7 +256,6 @@ class MapboxBasicRenderer extends Evented {
 
         // This needs to be source-specific!!
         this.transform.zoom = z; 
-        this.transform.tileZoom = z;
         
         // setup the list of currentlyRenderingTiles for each source
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
@@ -275,7 +277,7 @@ class MapboxBasicRenderer extends Evented {
               continue;
             }
 
-            Object.values(state.tiles).forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
+            state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
             relevantConsumers.forEach(cb => {
@@ -392,12 +394,7 @@ class MapboxBasicRenderer extends Evented {
     this._canvas.style.top = "250px";
     this._canvas.style.right = "20px";
     this._canvas.style.background = "#ccc";
-    var buffer = this._debugBufferEl = document.createElement('div');
-    buffer.style.position = "fixed";
-    buffer.style.top = "250px";
-    buffer.style.right = "20px";
-    buffer.style.border = '45px solid rgba(255,0,0,0.2)'; // TODO: use this._bufferZoneWidth properly
-    document.body.appendChild(buffer);
+    this._canvas.style.opacity = '0.7';
   }
 
 }

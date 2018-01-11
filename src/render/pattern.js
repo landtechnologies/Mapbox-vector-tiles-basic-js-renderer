@@ -48,10 +48,10 @@ exports.prepare = function (image: CrossFaded<string>, painter: Painter, program
 exports.setTile = function (tile: {tileID: OverscaledTileID, tileSize: number}, painter: Painter, program: Program) {
     const gl = painter.context.gl;
 
-    gl.uniform1f(program.uniforms.u_tile_units_to_pixels, 1 / pixelsToTileUnits(tile, 1, painter.transform.tileZoom));
+    gl.uniform1f(program.uniforms.u_tile_units_to_pixels, 1 / pixelsToTileUnits(tile, 1, painter.transform.tileZoom(tile)));
 
     const numTiles = Math.pow(2, tile.tileID.overscaledZ);
-    const tileSizeAtNearestZoom = tile.tileSize * Math.pow(2, painter.transform.tileZoom) / numTiles;
+    const tileSizeAtNearestZoom = tile.tileSize * Math.pow(2, painter.transform.tileZoom(tile)) / numTiles;
 
     const pixelX = tileSizeAtNearestZoom * (tile.tileID.canonical.x + tile.tileID.wrap * numTiles);
     const pixelY = tileSizeAtNearestZoom * tile.tileID.canonical.y;

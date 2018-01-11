@@ -57,7 +57,7 @@ function drawLineTile(program, painter, tile, bucket, layer, coord, programConfi
     let posA, posB, imagePosA, imagePosB;
 
     if (programChanged || tileRatioChanged) {
-        const tileRatio = 1 / pixelsToTileUnits(tile, 1, painter.transform.tileZoom);
+        const tileRatio = 1 / pixelsToTileUnits(tile, 1, painter.transform.tileZoom(tile));
 
         if (dasharray) {
             posA = painter.lineAtlas.getDash(dasharray.from, layer.layout.get('line-cap') === 'round');

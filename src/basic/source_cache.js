@@ -29,14 +29,13 @@ class BasicSourceCache {
   getVisibleCoordinates(){
     return this.currentlyRenderingTiles.map(t => t.tileID);
   }
-  getTile(tileID){
-    // important: every call to getTile should be paired with a call to releaseTile
+  acquireTile(tileID, size){
+    // important: every call to acquireTile should be paired with a call to releaseTile
     // you can also manually increment tile.uses, however do not decrement it directly, instead
     // call releaseTile.
-
-    let tile = this._tilesInUse[tileID] ||
+    let tile = this._tilesInUse[tileID.key] ||
                this._tileCache.getAndRemove(id) ||
-               new Tile(tileID.wrapped(), 512, z); // previous the 512 was this._resolution
+               new Tile(tileID.wrapped(), size, z); 
     tile.uses++;
     this._tilesInUse[id] = tile;
 
@@ -48,6 +47,10 @@ class BasicSourceCache {
     }
 
     return tile;
+  }
+  getTile(tileID){
+    // note that the requested tile should actually also feature in currentlyRenderingTiles..but that's harder to query
+    return this._tilesInUse[tileID.key];
   }
   serialize(){
     return this._source.serialize();

@@ -21,8 +21,8 @@ class BasicSourceCache {
 
   constructor(source){
     this._source = source;
-    this._tileCache = = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
-  },
+    this._tileCache = new Cache(TILE_CACHE_SIZE, t => this._source.unloadTile(t));
+  }
   getSource(){
     return this._source;
   }

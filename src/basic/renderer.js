@@ -55,12 +55,6 @@ class MapboxBasicRenderer extends Evented {
     this._configId = 0; // for use with async config changes..see setXYZ methods below
   }
 
-  get _source(a,b,c){
-    console.log(a,b,c);
-    throw new Error("get _source called!");
-    return this._style._source;
-  }
-
   _transformRequest(url, resourceType) {
     return {url: url, headers: {}, credentials: ''};
   }

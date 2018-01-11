@@ -13,10 +13,7 @@ class BasicStyle extends Style {
   }
 
   addSource(id, source, options){
-    let source = Source.create(id, source, this.dispatcher, this);
-    source.tiles = source.tiles;
     source.map = this.map;
-    source.setEventedParent(this, {source: this._source});
     this.sourceCaches[id] = BasicSourceCache(source);
   }
 

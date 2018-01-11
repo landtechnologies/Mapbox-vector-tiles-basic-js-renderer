@@ -17,35 +17,47 @@ var sphericalMercator = new SphericalMercator();
 
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
-const MAX_RENDER_SIZE = 1024; // for higher resolutions, we render in sections
-const DEFAULT_BUFFER_ZONE_WIDTH = 0;
+const OFFSCREEN_CANV_SIZE = 1024; 
 
 var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
 
 
 class MapboxBasicRenderer extends Evented {
 
-  constructor(options) {
+  constructor() {
     super();
-    this._initOptions = options = options || {}; 
-    this.transform = {
-      zoom: 0, angle: 0, pitch: 0, _pitch: 0, scaleZoom: ()=> 0,
-      cameraToCenterDistance: 1, cameraToTileDistance: () => 1 , clone: () => this.transform};
-    this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
-    this._style.setEventedParent(this, {style: this._style});
-    this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0})));
-    this._nextRenderId = 0;
     this._canvas = document.createElement('canvas');
     this._canvas.style.imageRendering = 'pixelated';
     this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
     this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
+    this._canvas.width = OFFSCREEN_CANV_SIZE;
+    this._canvas.height = OFFSCREEN_CANV_SIZE;
+    this.transform = {
+      zoom: 0,
+      angle: 0,
+      pitch: 0,
+      _pitch: 0,
+      scaleZoom: ()=> 0,
+      cameraToCenterDistance: 1,
+      cameraToTileDistance: () => 1,
+      clone: () => this.transform,
+      width: OFFSCREEN_CANV_SIZE,
+      height: OFFSCREEN_CANV_SIZE,
+      pixelsToGLUnits: [2 / OFFSCREEN_CANV_SIZE, -2 / OFFSCREEN_CANV_SIZE]
+    };
+    this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
+    this._style.setEventedParent(this, {style: this._style});
+    this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0})));
     this._createGlContext();
-    this.setResolution(DEFAULT_RESOLUTION, DEFAULT_BUFFER_ZONE_WIDTH);
-    this._pendingRenders = {}; // tileID.key => render state
+    this.painter.resize(OFFSCREEN_CANV_SIZE, OFFSCREEN_CANV_SIZE); 
+    this._pendingRenders = new Map(); // tileSetID => render state
+    this._nextRenderId = 0; // each new render state created has a unique renderId in addition to its tileSetID, which isn't unique
     this._configId = 0; // for use with async config changes..see setXYZ methods below
   }
 
-  get _source(){
+  get _source(a,b,c){
+    console.log(a,b,c);
+    throw new Error("get _source called!");
     return this._style._source;
   }
 
@@ -82,13 +94,11 @@ class MapboxBasicRenderer extends Evented {
 
     const factor = (this._resolution/this._canvasSizeInner) // this bit is 1 for further-zoomed out rendering
                    *(this._canvasSizeInner/this._canvasSizeFull);
-    const b = this._bufferZoneWidth/this._canvasSizeFull*2;
 
     // The main calculation...
     mat4.identity(this._tmpMat4f64);
     translate(this._tmpMat4f64, [-EXTENT*transX/this._resolution, -EXTENT*transY/this._resolution,0]);
     scale(this._tmpMat4f64,[2/EXTENT*factor, -2/EXTENT*factor, 1]);
-    translate(this._tmpMat4f64, [-1+b, 1-b, 0]);
 
     this._tmpMat4f32.set(this._tmpMat4f64);
     return this._tmpMat4f32;
@@ -96,8 +106,8 @@ class MapboxBasicRenderer extends Evented {
 
   _createGlContext(){
     const attributes = Object.assign({
-        failIfMajorPerformanceCaveat: this._initOptions.failIfMajorPerformanceCaveat,
-        preserveDrawingBuffer: this._initOptions.preserveDrawingBuffer
+        failIfMajorPerformanceCaveat: false,
+        preserveDrawingBuffer: false
     }, require('mapbox-gl-supported').webGLContextAttributes);
     
     this._gl = this._canvas.getContext('webgl', attributes) ||
@@ -141,19 +151,6 @@ class MapboxBasicRenderer extends Evented {
       });
   }
 
-  getSuggestedBufferWidth(zoom){
-    let visibleLayerTypes = new Set(this.getLayersVisible(zoom).map(lyr => this._style._layers[lyr].type));
-    let suggestions = [];
-
-    visibleLayerTypes.delete("circle") && suggestions.push(30);
-    visibleLayerTypes.delete("symbol") && suggestions.push(30);
-    visibleLayerTypes.delete('fill') && suggestions.push(0);
-    visibleLayerTypes.delete('line') && suggestions.push(0);
-    (visibleLayerTypes.size > 0) && console.warn('unknown types ignored');
-    suggestions.some(x=>x!==suggestions[0]) && console.warn('clash of buffer width suggestions');
-    return suggestions[0];
-  }
-
   getLayersVisible(zoom){
     // if zoom is provided will filter by min/max zoom as well as by layer visibility
     return Object.keys(this._style._layers)
@@ -175,46 +172,33 @@ class MapboxBasicRenderer extends Evented {
     return ++this._configId;
   }
 
-  setResolution(r, bufferZoneWidth){
-    bufferZoneWidth = bufferZoneWidth || 0;
-    if(r === this._resolution && this._bufferZoneWidth === bufferZoneWidth){
-      return;
-    }
-    this._resolution = r;
-    this._bufferZoneWidth = bufferZoneWidth;
-    this._canvasSizeFull = Math.min(r + 2*bufferZoneWidth, MAX_RENDER_SIZE);
-    this._canvasSizeInner = this._canvasSizeFull - 2*bufferZoneWidth;
-    this._canvas.width = this._canvasSizeFull;
-    this._canvas.height = this._canvasSizeFull;
-    this.transform.pixelsToGLUnits = [2 / this._canvasSizeFull, -2 / this._canvasSizeFull];
-    this.transform.width = this._canvasSizeFull;
-    this.transform.height = this._canvasSizeFull;
-    this.painter.resize(this._canvasSizeFull, this._canvasSizeFull); 
-    this._cancelAllPendingRenders();
-
-    if(this._debugBufferEl){
-      this._debugBufferEl.style.width = this._canvasSizeFull + 'px';
-      this._debugBufferEl.style.height = this._canvasSizeFull + 'px';
-    } 
-
-    return ++this._configId;
-  }
-
   _cancelAllPendingRenders(){ 
-    Object.keys(this._pendingRenders).forEach(k => this._finishRender(k, "canceled"))
-    this._pendingRenders = {};
+    this._pendingRenders.forEach(s => this._finishRender(s.tileSetID, s.renderId, "canceled"));
+    this._pendingRenders.clear();
     Object.values(this._style.sourceCaches).forEach(s => s.invalidateAllLoadedTiles());
   }
 
-  releaseRender(renderRef, state){
+  _finishRender(tileSetID, renderId, err){ 
+    let state = this._pendingRenders.get(tileSetID);
+    if(!state || state.renderId !== renderId){
+      return; // render for this tile has been canceled, or superceded.
+    }
+    while(state.consumers.length){
+      state.consumers.shift().next(err);
+    }
+    clearTimeout(state.timeout);
+    this._pendingRenders.delete(tileSetID);
+    
+    err && state.tiles.forEach(t => t.source.releaseTile(t)); 
+    // if the render is successful, then the responsibility for calling releaseRender lies elsewhere
+  }
+
+  releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
+    renderRef.tiles.forEach(t => t.source.releaseTile(t));
     
-    Object.keys(renderRef.tiles).forEach(k =>
-      this._style.sourceCaches[k].releaseTile(renderRef.tiles[k]));
-    
-    let state = Object.values(this._pendingRenders)
-                      .find(state => state.renderId === renderRef.id);
-    if(!state){
+    let state = this._pendingRenders.get(renderRef.tileSetID);
+    if(!state || state.renderId !== renderRef.renderId){
       return; // tile was already rendered
     } 
     
@@ -223,135 +207,119 @@ class MapboxBasicRenderer extends Evented {
     (idx !== -1) && state.consumers.splice(idx,1); 
 
     // if there are no consumers left then clean-up the render
-    (state.consumers.length === 0) && this._finishRender(state.tileGroupID, "fully-canceled");    
+    (state.consumers.length === 0) && this._finishRender(state.tileGroupID, renderRef.renderId, "fully-canceled");    
   }
 
-  _finishRender(tileGroupID, err){ 
-    let state = this._pendingRenders[tileGroupID];
-    if(!state || state.renderId !== renderId){
-      return; // render for this tile has been canceled, or superceded.
-    }
-    while(state.consumers.length){
-      state.consumers.shift().next(err);
-    }
-    clearTimeout(state.timeout);
-    delete this._pendingRenders[tileGroupID];
-    
-    if(err){
-      Object.keys(state.tiles).forEach(k => this._style.sourceCaches[k].releaseTile(state.tiles[k])); 
-    } // if the render is successful, then the parent is responsible for calling releaseRender at some point in order to releaseTiles
-  }
+  renderTiles(ctx, drawSpec, tilesSpec, next){
+    // drawSpec has {destLeft,destTop,srcLeft,srcTop,width,height}
+    // tilesSpec is an array of: {sourceName,z,x,y,left,top,size}
+    // The tilesSpec defines how a selection of source tiles are rendered to an
+    // imaginary canvas, and then drawSpec states what to copy from that imaginary canvas 
+    // to the real ctx. 
+    // the returned token must be passed to releaseRender at some point
 
-  renderTile(ctx, destSpec, sourceSpec, next){
-    let consumer = {ctx, destSpec, sourceSpec, next};
+    let consumer = {ctx, drawSpec, tilesSpec, next};
 
     // need to filter sourceSpec based on which source layers we actually need with the current settings
-    // note that each consumer adds an extra use++ to each source tile of relevance,
-    // and this must be decremented when either the render fails or when the rendered output is no
-    // longer on screen (the latter case must be dealt with explicitly by the caller).
+    // note that each consumer adds an extra use++ to each source tile of relevance.
 
-    // prepare the tileIDs map from sourceName=>tile, and its string hash, tileGroupID
-    let tileIDs = {};
-    Object.keys(sourceSpec).forEach(k => {
-      let spec = sourceSpec[k]; 
-      tileIDs[k] = new OverscaledTileID(spec.z, 0, spec.z, spec.x, spec.y, 0);
-    });
-    let tileGroupID = Object.keys(tileIDs).sort()
-      .map(k => k + tileIDs[k].key)
-      .join("");
+    // any requests that have the same tileSetID can be coallesced into a single _pendingRender
+    let tileSetID = tilesSpec.map(s => `${s.source} ${s.z} ${s.x} ${s.y} ${s.left} ${s.top} ${s.size}`).sort().join(" ");
 
-    // See if the tile group is already pending render, if so we don't need to do much...
-    let state = this._pendingRenders[tileGroupID];
+    // See if the tile set is already pending render, if so we don't need to do much...
+    let state = this._pendingRenders.get(tileSetID);
     if(state){
-      Object.values(state.tiles).forEach(t => t.uses++);
+      state.tiles.forEach(t => t.uses++);
       state.consumers.push(consumer);
-      return {id: state.renderId, consumer, state.tiles};
+      return {renderId: state.renderId, consumer, tiles: state.tiles};
     }
 
-    // Unfortunately we need to create a new pending render (which may include creating & loading new tiles)...
+    // Ok, well we need to create a new pending render (which may include creating & loading new tiles)...
     let renderId = ++this._nextRenderId;
-    let tiles = {};
-    Object.keys(sourceSpec).forEach(k => {
-      let spec = sourceSpec[k];
-      tiles[k] = this._style.sourceCaches[k].getTile(tileIDs[k].key); // includes .uses++
-    });
-    state = this._pendingRenders[tileGroupID] = {
-      tileGroupID,
-      tiles,
-      renderId,
+    state = this._pendingRenders.set(tileSetID, {
+      tileSetID,
+      renderId, 
+      tiles: tilesSpec.map(spec => {
+        let tileID = new OverscaledTileID(spec.z, 0, spec.z, spec.x, spec.y, 0);
+        return this._style.sourceCaches[spec.source].getTile(tileID.key); // includes .uses++
+      }),
       consumers: [consumer],
-      timeout: setTimeout(() => this._finishRender(tileGroupID, "timeout"), TILE_LOAD_TIMEOUT)
-    };   
+      timeout: setTimeout(() => this._finishRender(tileSetID, renderId, "timeout"), TILE_LOAD_TIMEOUT) // might want to do this per-tile in the sourceCache
+    });
 
     // once all the tiles are loaded we can then execute the pending render...
-    Promise.all(Object.values(tiles).map(t => t.loadedPromise)).then(() => {
+    Promise.all(state.tiles.map(t => t.loadedPromise))
+      // TODO: if one or more tiles is unavailable we could still carry on with the render I suppose, but need to release the bad tiles so we dont try and use them
+      .catch(err => this._finishRender(tileSetID, renderId, err)) // will delete the pendingRender so the next promise's initial check will fail
+      .then(() => {
+        state = this._pendingRenders.get(tileSetID);
+        if(!state || state.renderId !== renderId){
+          return; // render for this tileGroupID has been canceled, or superceded.
+        }
 
-      state = this._pendingRenders[tileGroupID];
-      if(!state || state.renderId !== renderId){
-        return; // render for this tileGroupID has been canceled, or superceded.
-      }
+        // This needs to be source-specific!!
+        this.transform.zoom = z; 
+        this.transform.tileZoom = z;
+        
+        // setup the list of currentlyRenderingTiles for each source
+        Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
+        tilesSpec.forEach((s,ii)=>{
+          let t = state.tiles[ii];
+          t.tileSize = s.size;
+          this._style.sourceCaches[s.source].currentlyRenderingTiles.push(t);
+        })
 
-      // This needs to be source-specific!!
-      this.transform.zoom = z; 
-      this.transform.tileZoom = z;
-      
-      Object.values(state.tiles).forEach(t => t.tileSize = this._resolution);
-      Object.keys(state.tiles).forEach(k => this._style.sourceCaches[k].setCurrentlyRenderingTile(state.tiles[k]));
+        for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
+          for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
+            // need to figure this out!!
+            var relevantConsumers = state.consumers.filter(cb =>
+              cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > xx &&
+              cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
+              cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > yy && 
+              cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
+            if(relevantConsumers.length === 0){
+              continue;
+            }
 
-      for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
-        for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
-          // need to figure this out!!
-          var relevantConsumers = state.consumers.filter(cb =>
-            cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > xx &&
-            cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
-            cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > yy && 
-            cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
-          if(relevantConsumers.length === 0){
-            continue;
-          }
+            Object.values(state.tiles).forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
+            this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
-          Object.values(state.tiles).forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
-          this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
+            relevantConsumers.forEach(cb => {
+                // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeInner]
+                // Note that requesting pixels from inside the buffer region is a special case, 
+                // and has to be dealt with very carefully, using src[Left|Right|Top|Bottom]Extra....
+                let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
+                let srcRight = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth -xx);
+                let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
+                let srcRightExtra = cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > this._resolution ?
+                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - this._resolution) : 0;
+                
+                let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
+                let srcBottom = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight -yy);
+                let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
+                let srcBottomExtra = cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > this._resolution ?
+                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - this._resolution) : 0;
 
-          relevantConsumers.forEach(cb => {
-              // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeInner]
-              // Note that requesting pixels from inside the buffer region is a special case, 
-              // and has to be dealt with very carefully, using src[Left|Right|Top|Bottom]Extra....
-              let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
-              let srcRight = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth -xx);
-              let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
-              let srcRightExtra = cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > this._resolution ?
-                                     Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - this._resolution) : 0;
-              
-              let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
-              let srcBottom = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight -yy);
-              let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
-              let srcBottomExtra = cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > this._resolution ?
-                                     Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - this._resolution) : 0;
+                cb.ctx.drawImage( 
+                  this._canvas,
+                  srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
+                  srcRight + srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra), 
+                  cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
+                  cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
+                  srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
 
-              cb.ctx.drawImage( 
-                this._canvas,
-                srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
-                srcRight + srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra), 
-                cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
-                cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
-                srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
+            });
+          } // yy
+        } // xx
+        
+        while(state.consumers.length){
+          state.consumers.shift().next();
+        }
+        clearTimeout(state.timeout);
+        this._pendingRenders.delete(tileSetID);
+      })
 
-          });
-        } // yy
-      } // xx
-      
-      Object.keys(state.tiles).forEach(k => this._style.sourceCaches[k].setCurrentlyRenderingTile(null));
-
-      while(state.consumers.length){
-        state.consumers.shift().next();
-      }
-      clearTimeout(state.timeout);
-      delete this._pendingRenders[tileGroupID];
-    })
-    .catch(err => this._finishRender(tileGroupID, err));
-
-    return {id: state.renderId, consumer, tiles};
+    return {renderId: state.renderId, consumer, tiles: state.tiles};
   }
 
   latLngToTileCoords(opts){

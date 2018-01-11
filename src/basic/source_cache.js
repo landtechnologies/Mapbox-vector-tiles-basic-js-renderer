@@ -9,7 +9,7 @@ const TILE_CACHE_SIZE = 100;
     + _tilesInUse - a map from tileID.key => tile, where the tiles have a .uses counter
     + _tileCache - a Least Recently Used cache, also from tileID.key => tile.
   In addition, one of the _tilesInUse may also appear as the following:
-    + _tileCurrentlyRendering - a tile that we actually want to be able to paint
+    + currentlyRenderingTiles - a list of tiles that we actually want to be able to paint
 */
 
 class BasicSourceCache {
@@ -17,7 +17,7 @@ class BasicSourceCache {
   _tilesInUse = {}; // tileID.key => tile (note that tile's have a .uses counter)
   map = {};
   _tileCache;
-  _tileCurrentlyRendering; 
+  currentlyRenderingTiles; 
 
   constructor(source){
     this._source = source;
@@ -26,11 +26,8 @@ class BasicSourceCache {
   getSource(){
     return this._source;
   }
-  setCurrentlyRenderingTile(tile){
-    this._tileCurrentlyRenderin = tile;
-  }
   getVisibleCoordinates(){
-    return this._tilesCurrentlyRendering.map(t => t.tileID);
+    return this.currentlyRenderingTiles.map(t => t.tileID);
   }
   getTile(tileID){
     // important: every call to getTile should be paired with a call to releaseTile
@@ -43,6 +40,7 @@ class BasicSourceCache {
     tile.uses++;
     this._tilesInUse[id] = tile;
 
+    tile.source = this._source; // redundant if tile is not new
     if(!tile.loadedPromise){
       // We need to actually issue the load request, and express it as a promise...
       tile.loadedPromise = new Promise((res, rej) => 

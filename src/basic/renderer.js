@@ -24,7 +24,7 @@ var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet
 
 class MapboxBasicRenderer extends Evented {
 
-  constructor() {
+  constructor(options) {
     super();
     this._canvas = document.createElement('canvas');
     this._canvas.style.imageRendering = 'pixelated';
@@ -44,7 +44,7 @@ class MapboxBasicRenderer extends Evented {
       width: OFFSCREEN_CANV_SIZE,
       height: OFFSCREEN_CANV_SIZE,
       pixelsToGLUnits: [2 / OFFSCREEN_CANV_SIZE, -2 / OFFSCREEN_CANV_SIZE],
-      tileZoom(tile) => tile.tileID.canonical.z 
+      tileZoom: (tile) => tile.tileID.canonical.z 
     };
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
@@ -208,6 +208,7 @@ class MapboxBasicRenderer extends Evented {
   }
 
   renderTiles(ctx, drawSpec, tilesSpec, next){
+    return;
     // drawSpec has {destLeft,destTop,srcLeft,srcTop,width,height}
     // tilesSpec is an array of: {sourceName,z,x,y,left,top,size}
     // The tilesSpec defines how a selection of source tiles are rendered to an

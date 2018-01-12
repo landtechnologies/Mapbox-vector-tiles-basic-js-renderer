@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Basic Vector Tile Rendering</title>
+    <style>
+    body{
+      display: flex;
+      flex-direction: row;
+      flex-align: start;
+      margin: 0;
+    }
+    #settings{
+      height: 100vh;
+      padding: 10px;
+      min-width: 300px;
+      overflow: auto;
+    }
+    #result{
+      height: 100vh;
+      min-width: 500px;
+      background: #eee;
+      overflow: auto;
+    }
+    textarea{
+      display: block;
+    }
+    </style>
+
+  </head>
+  <body>
+
+  <div id="settings">
+    <h3>Basic Vector Tile Rendering</h3>
+
+    This demo shows how to use the main <code>renderTiles</code> method on the <code>BasicRenderer</code>.
+    <br><br>
+    When testing locally, you can configure the defaults for the following text fields by modifying
+    the <code>defaults.js</code> file (changes are ignored by git).
+
+    <section>
+      <h4>Style</h4>
+      The renderer lets you update individual bits of the style without fully reloading, but
+      in this demo you can only give the full style and press "Apply" to create a new instance
+      of the renderer with this applied.
+      <textarea rows="20" cols="80" id="styleText">
+
+      </textarea>
+      <button>Apply</button>
+    </section>
+
+    <section>
+      <h4>tilesSpec</h4>
+      Here you need to specify an array of tiles that you want to render, for each tile you need
+      to state the name of the source (as defined in the "style" above) as well as the tile's <code>(z,x,y)</code>
+      values.  Then you need to state where the tile is to be rendered on our imaginary infinite canvas <code>(left,top,size)</code>.
+      There is no particular origin defined for left and top values, they are really just relative values across all the
+      tiles in this array and the values in <code>drawSpec</code> (below).
+      <textarea rows="20" cols="80" id="drawSpec">
+        
+      </textarea>
+      <button>Apply</button>
+    </section>
+
+    <section>
+      <h4>drawSpec</h4>
+      Here you need to specify which section of the imaginary infinite canvas you want to copy to the real canvas 
+      <code>(destLeft, destTop,srcLeft,srcTop,width,height)</code>. As stated above, note that there is no particular origin in the imaginary infinite canvas, coordiantes are just relative to each other.
+      <textarea rows="20" cols="80" id="drawSpec">
+
+      </textarea>
+      <button>Apply</button>
+    </section>
+
+  </div>
+
+  <div id="result">
+    
+  </div>
+
+  <script src="http://localhost:9998/main.build.js" />
+  </body>
+</html>

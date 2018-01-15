@@ -392,10 +392,11 @@ class MapboxBasicRenderer extends Evented {
   showCanvasForDebug(){
     document.body.appendChild(this._canvas);
     this._canvas.style.position = "fixed";
-    this._canvas.style.top = "250px";
-    this._canvas.style.right = "20px";
+    this._canvas.style.bottom = "0px";
+    this._canvas.style.right = "0px";
     this._canvas.style.background = "#ccc";
     this._canvas.style.opacity = '0.7';
+    this._canvas.style.transform = 'scale(0.5) translate(48%,48%)'
   }
 
 }

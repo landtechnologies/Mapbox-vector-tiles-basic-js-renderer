@@ -22,15 +22,34 @@
       overflow: auto;
       flex-grow: 1;
     }
-    #result{
+    #viz{
       height: 100vh;
       width: 500px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #imaginary-canvas{
+      height: 500px;
+      width: 100%;
       overflow: auto;
       position: relative;
-      flex-grow: 1;
       background:url(
         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAHElEQVQYV2M8dOjQfwYcgBEkaWdnx4hNftBJAgDKQxtNM7DqxQAAAABJRU5ErkJggg==
       ) repeat;
+      flex-grow: 1;
+    }
+    #real-canvas{
+      background: #eee;
+    }
+    #real-canvas-wrapper{
+      height: 500px;
+      width: 100%;
+      overflow: auto;
+      border-top: 3px solid #777;
+      flex-grow: 1;
+      position: relative;
     }
     textarea{
       display: block;
@@ -40,6 +59,21 @@
       background: rgba(0,0,0,0.2);
       position: absolute;
       white-space: pre;
+      padding: 4px;
+    }
+    #dest{
+      border: 2px solid red;
+      color: red;
+      font-weight: bold;
+      position: absolute;
+      white-space: pre;
+      padding: 4px;
+      overflow: visible;
+    }
+    #dest:before{
+      content: '';
+      height: 100%;
+      display: block;
       padding: 4px;
     }
     .src{
@@ -77,10 +111,14 @@
   <div id="settings">
     <h3>Basic Vector Tile Rendering</h3>
 
-    This demo shows how to use the main <code>renderTiles</code> method on the <code>BasicRenderer</code>.
+    <h4>Introduction</h4>
+    This demo shows how to use the main <code>renderTiles</code> method on the <code>BasicRenderer</code>. This left hand pane has three text fields which expect JSON input (there is not much in the way of input validation, so be nice).  On the right, the top section shows the "imaginary canvas", with all its source tiles and the region which is going to be
+    "copied" from. And the bottom section on the right shows the "real output canvas" that the <code>renderTiles</code> method is actually trying to write to. Here the output canvas size is fixed at 1024x1024, but the imaginary canvas will grow as needed, based on your json specifications below.  Don't forget to hit the "apply changes" button to update things.
     <br><br>
+
+
     When testing locally, you can configure the defaults for the following text fields by modifying
-    the <code>defaults.js</code> file (changes are ignored by git).
+    the <code>defaults.js</code> file (use the command <code>git update-index --skip-worktree debug/basic/defaults.js</code> to ensure git ignores any changes you make locally).
 
     <section>
       <h4>Style</h4>
@@ -114,8 +152,12 @@
     </section>
   </div>
 
-  <div id="result">
-    
+  <div id="viz">
+    <div id="imaginary-canvas"></div>
+    <div id="real-canvas-wrapper">
+      <canvas id="real-canvas" width="1024" height="1024" ></canvas>
+      <div id="dest"></div>
+    </div>
   </div>
   <button id="applyBtn">Apply Changes</button>
     

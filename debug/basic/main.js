@@ -3,9 +3,7 @@ import defaults from './defaults';
 
 window.BasicRenderer = BasicRenderer;
 
-function doIt(){
-
-  // parse textarea inputs :::::::::::::::::::::::::::::::::::::::::::::::::::::::
+function parseTextAreas(){
   let tilesSpec = window.tilesSpec = document.getElementById("tilesSpecText").value;
   let drawSpec = window.drawSpec = document.getElementById("drawSpecText").value;
   let style = window.style = document.getElementById("styleText").value;
@@ -14,6 +12,14 @@ function doIt(){
   } catch(e){
     return alert("tileSpec parse error: " + e);
   }
+  if(!Array.isArray(tilesSpec)){
+    return alert("tilesSpec needs to be an array");
+  }
+  if(!tilesSpec.every(s => 
+      s.source && s.z > 0 && s.x > 0 && s.y > 0 &&
+      Number.isFinite(s.top) && Number.isFinite(s.left) && Number.isFinite(s.size))){
+      return alert("Bad tileSpec..one or more elements do not have the expected numerical fields");
+    }
   try{
     drawSpec = JSON.parse(drawSpec);
   } catch(e){
@@ -24,10 +30,18 @@ function doIt(){
   } catch(e){
     return alert("style parse error: " + e);
   }
+  return {tilesSpec, drawSpec, style}
+}
+
+
+function doIt(){
+  let {tilesSpec, drawSpec, style} = parseTextAreas();
 
   // visualise everything's layout on the imaginary canvas :::::::::::::::::::::::::
-  let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity) - 50;
-  let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity) - 50;
+  let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity);
+  let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity);
+  minLeft = Math.min(minLeft, drawSpec.srcLeft) - 50;
+  minTop = Math.min(minTop, drawSpec.srcTop) - 50;
   let imaginaryCanvasEl = document.getElementById("imaginary-canvas");
   imaginaryCanvasEl.innerHTML = "";
 

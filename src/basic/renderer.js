@@ -190,6 +190,47 @@ class MapboxBasicRenderer extends Evented {
     // if the render is successful, then the responsibility for calling releaseRender lies elsewhere
   }
 
+  _canonicalizeSpec(tilesSpec, drawSpec){
+    // we define the origin as the minimum left and top values mentioned in tileSpec/drawSpec
+    // and adjust all the top/left values to use this reference.  This cannonicalization means
+    // we can spot tile sets that are the same except for a gobal translation.
+
+    let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity);
+    let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity);
+    minLeft = Math.min(minLeft, drawSpec.srcLeft);
+    minTop = Math.min(minTop, drawSpec.srcTop);
+    
+    return {
+      tilesSpec: tilesSpec.map(s => ({
+        source: s.source,
+        z: s.z,
+        x: s.x,
+        y: s.y,
+        top: s.top - minTop,
+        left: s.left - minLeft,
+        size: s.size
+      })),
+      drawSpec: {
+        srcLeft: drawSpec.srcLeft - minLeft,
+        srcTop: drawSpec.srcTop - minTop,
+        width: drawSpec.width,
+        height: drawSpec.height,
+        destLeft: drawSpec.destLeft,
+        destTop: drawSpec.destTop
+      }
+    }
+  }
+
+  _tileSpecToString(tileSpec){
+    // this is basically a stable JSON.stringify..could proably optimize this a bit if we really cared.
+    return tilesSpec
+      .map(s => `${s.source} ${s.z} ${s.x} ${s.y} ${s.left} ${s.top} ${s.size}`)
+      .sort()
+      .join(" ");
+  }
+
+
+
   releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
     renderRef.tiles.forEach(t => t.source.releaseTile(t));
@@ -208,7 +249,6 @@ class MapboxBasicRenderer extends Evented {
   }
 
   renderTiles(ctx, drawSpec, tilesSpec, next){
-    return;
     // drawSpec has {destLeft,destTop,srcLeft,srcTop,width,height}
     // tilesSpec is an array of: {sourceName,z,x,y,left,top,size}
     // The tilesSpec defines how a selection of source tiles are rendered to an
@@ -216,14 +256,17 @@ class MapboxBasicRenderer extends Evented {
     // to the real ctx. 
     // the returned token must be passed to releaseRender at some point
 
-    let consumer = {ctx, drawSpec, tilesSpec, next};
 
     // need to filter sourceSpec based on which source layers we actually need with the current settings
     // note that each consumer adds an extra use++ to each source tile of relevance.
 
     // any requests that have the same tileSetID can be coallesced into a single _pendingRender
-    let tileSetID = tilesSpec.map(s => `${s.source} ${s.z} ${s.x} ${s.y} ${s.left} ${s.top} ${s.size}`).sort().join(" ");
+    ({drawSpec, tilesSpec} = this._canonicalizeSpec(drawSpec, tilesSpec));
+    let tileSetID = this._tileSpecToString(tileSpec);
+    
+    let consumer = {ctx, drawSpec, tilesSpec, next};
 
+   
     // See if the tile set is already pending render, if so we don't need to do much...
     let state = this._pendingRenders.get(tileSetID);
     if(state){

@@ -88,9 +88,17 @@ function doIt(){
 
   // perform the actual render ::::::::::::::::::::::::::::::::::::::::::::::::
   let realCanvasEl = document.getElementById("real-canvas");
-  let renderer = new BasicRenderer({style});
-  renderer.renderTiles(realCanvasEl.getContext('2d'), drawSpec, tilesSpec,
-    err => err ? console.error("renderTiles:" + err) : console.log("done rendering"));
+  window.renderer = new BasicRenderer({style});
+
+  window.renderer.on('data',  data => {
+    if(data.dataType !== "style") {
+      return;
+    }
+    renderer.renderTiles(realCanvasEl.getContext('2d'),
+      drawSpec,
+      tilesSpec,
+      err => err ? console.error("renderTiles:" + err) : console.log("done rendering"));
+  });
 }
 
 document.getElementById("applyBtn").onclick = doIt;

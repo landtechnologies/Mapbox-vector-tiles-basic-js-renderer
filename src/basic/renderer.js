@@ -5,7 +5,6 @@ const BasicPainter = require('./painter'),
       {OverscaledTileID} = require('../source/tile_id'),
       {mat4} = require('@mapbox/gl-matrix'),
       Source = require('../source/source'),
-      Tile = require('../source/tile'),
       Point = require('point-geometry'),
       QueryFeatures = require('../source/query_features'),
       SphericalMercator = require('@mapbox/sphericalmercator'),
@@ -221,7 +220,7 @@ class MapboxBasicRenderer extends Evented {
     }
   }
 
-  _tileSpecToString(tileSpec){
+  _tileSpecToString(tilesSpec){
     // this is basically a stable JSON.stringify..could proably optimize this a bit if we really cared.
     return tilesSpec
       .map(s => `${s.source} ${s.z} ${s.x} ${s.y} ${s.left} ${s.top} ${s.size}`)
@@ -261,12 +260,11 @@ class MapboxBasicRenderer extends Evented {
     // note that each consumer adds an extra use++ to each source tile of relevance.
 
     // any requests that have the same tileSetID can be coallesced into a single _pendingRender
-    ({drawSpec, tilesSpec} = this._canonicalizeSpec(drawSpec, tilesSpec));
-    let tileSetID = this._tileSpecToString(tileSpec);
+    ({drawSpec, tilesSpec} = this._canonicalizeSpec(tilesSpec, drawSpec));
+    let tileSetID = this._tileSpecToString(tilesSpec);
     
     let consumer = {ctx, drawSpec, tilesSpec, next};
 
-   
     // See if the tile set is already pending render, if so we don't need to do much...
     let state = this._pendingRenders.get(tileSetID);
     if(state){
@@ -277,16 +275,17 @@ class MapboxBasicRenderer extends Evented {
 
     // Ok, well we need to create a new pending render (which may include creating & loading new tiles)...
     let renderId = ++this._nextRenderId;
-    state = this._pendingRenders.set(tileSetID, {
+    state = {
       tileSetID,
       renderId, 
-      tiles: tilesSpec.map(spec => {
-        let tileID = new OverscaledTileID(spec.z, 0, spec.z, spec.x, spec.y, 0);
-        return this._style.sourceCaches[spec.source].acquireTile(tileID, spec.size); // includes .uses++
+      tiles: tilesSpec.map(s => {
+        let tileID = new OverscaledTileID(s.z, 0, s.z, s.x, s.y, 0);
+        return this._style.sourceCaches[s.source].acquireTile(tileID, s.size); // includes .uses++
       }),
       consumers: [consumer],
       timeout: setTimeout(() => this._finishRender(tileSetID, renderId, "timeout"), TILE_LOAD_TIMEOUT) // might want to do this per-tile in the sourceCache
-    });
+    };
+    this._pendingRenders.set(tileSetID, state);
 
     // once all the tiles are loaded we can then execute the pending render...
     Promise.all(state.tiles.map(t => t.loadedPromise))
@@ -299,7 +298,7 @@ class MapboxBasicRenderer extends Evented {
         }
 
         // This needs to be source-specific!!
-        this.transform.zoom = z; 
+        this.transform.zoom = 16; 
         
         // setup the list of currentlyRenderingTiles for each source
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
@@ -309,45 +308,43 @@ class MapboxBasicRenderer extends Evented {
           this._style.sourceCaches[s.source].currentlyRenderingTiles.push(t);
         })
 
-        for(var xx=0; xx<this._resolution; xx+= this._canvasSizeInner){
-          for(var yy=0; yy<this._resolution; yy+=this._canvasSizeInner){
-            // need to figure this out!!
-            var relevantConsumers = state.consumers.filter(cb =>
-              cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > xx &&
-              cb.drawImageSpec.srcLeft < xx + this._canvasSizeInner &&
-              cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > yy && 
-              cb.drawImageSpec.srcTop < yy + this._canvasSizeInner);
+        // Work out the bounding box containing all src regions 
+        let xSrcMin = state.consumers.map(c => c.drawSpec.srcLeft).reduce((a,b)=>Math.min(a,b),Infinity);
+        let ySrcMin = state.consumers.map(c => c.drawSpec.srcTop).reduce((a,b)=>Math.min(a,b),Infinity);
+        let xSrcMax = state.consumers.map(c => c.drawSpec.srcLeft + c.drawSpec.width).reduce((a,b)=>Math.max(a,b),-Infinity);
+        let ySrcMax = state.consumers.map(c => c.drawSpec.srcTop + c.drawSpec.height).reduce((a,b)=>Math.max(a,b),-Infinity);
+
+        // iterate over OFFSCREEN_CANV_SIZE x OFFSCREEN_CANV_SIZE blocks of that bounding box
+        for(let xx=xSrcMin; xx<xSrcMax; xx+=OFFSCREEN_CANV_SIZE){
+          for(let yy=ySrcMin; yy<ySrcMax; yy+=OFFSCREEN_CANV_SIZE){
+
+            // for the section of the imaginary canvas at (xx,yy) and of
+            // size OFFSCREEN_CANV_SIZE x OFFSCREEN_CANV_SIZE, find the list
+            // of relevant consumers.
+            var relevantConsumers = state.consumers.filter(c =>
+              c.drawSpec.srcLeft + c.drawSpec.width > xx &&
+              c.drawSpec.srcLeft < xx + OFFSCREEN_CANV_SIZE &&
+              c.drawSpec.srcTop + c.drawSpec.height > yy && 
+              c.drawSpec.srcTop < yy + OFFSCREEN_CANV_SIZE);
             if(relevantConsumers.length === 0){
               continue;
             }
 
-            state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
+            // TODO: the actual posMatrix & render!!
+            //state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
-            relevantConsumers.forEach(cb => {
-                // convert from [-bufferZoneWidth, resolution+bufferZoneWidth] to [0, canvasSizeInner]
-                // Note that requesting pixels from inside the buffer region is a special case, 
-                // and has to be dealt with very carefully, using src[Left|Right|Top|Bottom]Extra....
-                let srcLeft = Math.max(0, cb.drawImageSpec.srcLeft-xx);
-                let srcRight = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth -xx);
-                let srcLeftExtra = cb.drawImageSpec.srcLeft < 0 && xx === 0 ? Math.max(cb.drawImageSpec.srcLeft, -this._bufferZoneWidth) : 0;
-                let srcRightExtra = cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth > this._resolution ?
-                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcLeft + cb.drawImageSpec.srcWidth - this._resolution) : 0;
-                
-                let srcTop = Math.max(0, cb.drawImageSpec.srcTop-yy);
-                let srcBottom = Math.min(this._canvasSizeInner, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight -yy);
-                let srcTopExtra = cb.drawImageSpec.srcTop < 0 && yy === 0 ? Math.max(cb.drawImageSpec.srcTop, -this._bufferZoneWidth) : 0;
-                let srcBottomExtra = cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight > this._resolution ?
-                                       Math.max(this._bufferZoneWidth, cb.drawImageSpec.srcTop + cb.drawImageSpec.srcHeight - this._resolution) : 0;
-
-                cb.ctx.drawImage( 
-                  this._canvas,
-                  srcLeft + srcLeftExtra + this._bufferZoneWidth, srcTop + srcTopExtra + this._bufferZoneWidth, 
-                  srcRight + srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra), 
-                  cb.drawImageSpec.destLeft + ((xx > cb.drawImageSpec.srcLeft) && (xx - cb.drawImageSpec.srcLeft + srcLeftExtra)) |0,
-                  cb.drawImageSpec.destTop + ((yy > cb.drawImageSpec.srcTop) && (yy - cb.drawImageSpec.srcTop + srcTopExtra))|0,
-                  srcRight +srcRightExtra - (srcLeft + srcLeftExtra), srcBottom + srcBottomExtra - (srcTop + srcTopExtra))
-
+            relevantConsumers.forEach(c => {
+              let srcLeft = Math.max(0, c.drawSpec.srcLeft-xx) | 0;
+              let srcRight = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcLeft + c.drawSpec.width - xx) | 0;
+              let srcTop = Math.max(0, c.drawSpec.srcTop - yy) | 0;
+              let srcBottom = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcTop + c.drawSpec.height - yy) | 0;
+              c.ctx.drawImage( 
+                this._canvas,
+                srcLeft, srcTop, srcRight-srcLeft, srcBottom-srcTop, // src: left, top, width, height
+                c.drawSpec.destLeft + (c.drawSpec.srcLeft<xx ? xx-c.drawSpec.srcLeft : 0), // destLeft
+                c.drawSpec.destTop + (c.drawSpec.srcTop<yy ? yy-c.drawSpec.srcTop : 0), // destTop 
+                srcRight-srcLeft, srcBottom-srcTop); // dest width, height
             });
           } // yy
         } // xx

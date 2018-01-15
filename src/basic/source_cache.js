@@ -1,5 +1,7 @@
 const Cache = require('../util/lru_cache'),
-      assert = require('assert');
+      assert = require('assert'),
+      Tile = require('../source/tile');
+
 const TILE_CACHE_SIZE = 100;
 
 
@@ -34,10 +36,10 @@ class BasicSourceCache {
     // you can also manually increment tile.uses, however do not decrement it directly, instead
     // call releaseTile.
     let tile = this._tilesInUse[tileID.key] ||
-               this._tileCache.getAndRemove(id) ||
-               new Tile(tileID.wrapped(), size, z); 
+               this._tileCache.getAndRemove(tileID.key) ||
+               new Tile(tileID.wrapped(), size, tileID.canonical.z); 
     tile.uses++;
-    this._tilesInUse[id] = tile;
+    this._tilesInUse[tileID.key] = tile;
 
     tile.source = this._source; // redundant if tile is not new
     if(!tile.loadedPromise){
@@ -56,7 +58,7 @@ class BasicSourceCache {
     return this._source.serialize();
   }
   prepare(context){
-    Object.values(this._source.map._tilesInUse).forEach(t => t.upload(context));
+    this.currentlyRenderingTiles.forEach(t => t.upload(context));
   }
   releaseTile(tile){
     assert(tile.uses > 0);
@@ -81,7 +83,7 @@ class BasicSourceCache {
     // by removing the loadedPromise, we force a fresh load next time the tile
     // is needed...although note that "fresh" is only partial because the rawData
     // is still available.
-    Object.key(this._tilesInUse).forEach(t => t.loadedPromise = null);
+    Object.keys(this._tilesInUse).forEach(t => t.loadedPromise = null);
     this._tileCache.keys().forEach(id => this._tileCache.get(id).loadedPromise = null);
   }
   reload(){ }

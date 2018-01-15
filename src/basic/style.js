@@ -13,8 +13,11 @@ class BasicStyle extends Style {
   }
 
   addSource(id, source, options){
-    source.map = this.map;
-    this.sourceCaches[id] = BasicSourceCache(source);
+    let source_ = Source.create(id, source, this.dispatcher, this);
+    source_.setEventedParent(this, {source: source_});
+    source_.map = this.map;
+    source_.tiles = source.tiles;
+    this.sourceCaches[id] = new BasicSourceCache(source_);
   }
 
   setPaintProperty(layer, prop, val){

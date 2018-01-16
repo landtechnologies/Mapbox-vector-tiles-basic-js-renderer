@@ -19,7 +19,6 @@ class BasicPainter extends Painter {
     if (layerStylesheet && layerStylesheet.maxzoom_ && this._filterForZoom >= layerStylesheet.maxzoom_) return;
     super.renderLayer(painter, sourceCache, layer, coords);
   }
-  enableTileClippingMask(){ }
 };
 
 module.exports = BasicPainter;

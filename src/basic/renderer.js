@@ -61,7 +61,7 @@ class MapboxBasicRenderer extends Evented {
     return {url: url, headers: {}, credentials: ''};
   }
 
-  _calculatePosMatrix(transX, transY) {   
+  _calculatePosMatrix(transX, transY, tileSize) {   
     /*
       The returned matrix, M, is designed to be used as:
         X_gl_coords = M * X_mvt_data_coords
@@ -88,13 +88,11 @@ class MapboxBasicRenderer extends Evented {
     this._tmpMat4f64 = this._tmpMat4f64 || new Float64Array(16); // reuse each time for GC's benefit
     this._tmpMat4f32 = this._tmpMat4f32 || new Float32Array(16);
 
-    const factor = (this._resolution/this._canvasSizeInner) // this bit is 1 for further-zoomed out rendering
-                   *(this._canvasSizeInner/this._canvasSizeFull);
-
     // The main calculation...
     mat4.identity(this._tmpMat4f64);
-    translate(this._tmpMat4f64, [-EXTENT*transX/this._resolution, -EXTENT*transY/this._resolution,0]);
-    scale(this._tmpMat4f64,[2/EXTENT*factor, -2/EXTENT*factor, 1]);
+    let factor = tileSize/OFFSCREEN_CANV_SIZE;
+    scale(this._tmpMat4f64,[2/EXTENT * factor, -2/EXTENT * factor, 1]);
+    translate(this._tmpMat4f64, [-1 + 2*transX/OFFSCREEN_CANV_SIZE, 1 - 2*transY/OFFSCREEN_CANV_SIZE, 0]);
 
     this._tmpMat4f32.set(this._tmpMat4f64);
     return this._tmpMat4f32;
@@ -297,7 +295,7 @@ class MapboxBasicRenderer extends Evented {
           return; // render for this tileGroupID has been canceled, or superceded.
         }
 
-        // This needs to be source-specific!!
+        // TODO: need to work out what this does
         this.transform.zoom = 16; 
         
         // setup the list of currentlyRenderingTiles for each source
@@ -305,6 +303,8 @@ class MapboxBasicRenderer extends Evented {
         tilesSpec.forEach((s,ii)=>{
           let t = state.tiles[ii];
           t.tileSize = s.size;
+          t.left = s.left;
+          t.top = s.top;
           this._style.sourceCaches[s.source].currentlyRenderingTiles.push(t);
         })
 
@@ -330,15 +330,18 @@ class MapboxBasicRenderer extends Evented {
               continue;
             }
 
-            // TODO: the actual posMatrix & render!!
-            //state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(xx, yy));
-            this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
+            state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
+            this.painter.render(this._style, {showTileBoundaries: true, showOverdrawInspector: false});
 
             relevantConsumers.forEach(c => {
               let srcLeft = Math.max(0, c.drawSpec.srcLeft-xx) | 0;
               let srcRight = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcLeft + c.drawSpec.width - xx) | 0;
               let srcTop = Math.max(0, c.drawSpec.srcTop - yy) | 0;
               let srcBottom = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcTop + c.drawSpec.height - yy) | 0;
+              this._srcMarker.style.width = srcRight-srcLeft + 'px';
+              this._srcMarker.style.height = srcBottom-srcTop + 'px';
+              this._srcMarker.style.right = (OFFSCREEN_CANV_SIZE - srcRight) + 'px';
+              this._srcMarker.style.bottom = (OFFSCREEN_CANV_SIZE - srcBottom) + 'px';
               c.ctx.drawImage( 
                 this._canvas,
                 srcLeft, srcTop, srcRight-srcLeft, srcBottom-srcTop, // src: left, top, width, height
@@ -436,7 +439,18 @@ class MapboxBasicRenderer extends Evented {
     this._canvas.style.right = "0px";
     this._canvas.style.background = "#ccc";
     this._canvas.style.opacity = '0.7';
-    this._canvas.style.transform = 'scale(0.5) translate(48%,48%)'
+    //this._canvas.style.transform = 'scale(0.5) translate(512px,512px)'
+
+    this._srcMarker = document.createElement('div');
+    document.body.appendChild(this._srcMarker);
+    this._srcMarker.style.position = "fixed";
+    this._srcMarker.style.border = "solid";
+    //this._srcMarker.style.transform = 'scale(0.5) translate(512px,512px)'
+
+  }
+  destroyDebugCanvas(){
+    document.body.removeChild(this._canvas);
+    document.body.removeChild(this._srcMarker);
   }
 
 }

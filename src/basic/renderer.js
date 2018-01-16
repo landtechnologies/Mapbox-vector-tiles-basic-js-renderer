@@ -20,7 +20,6 @@ const OFFSCREEN_CANV_SIZE = 1024;
 
 var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
 
-
 class MapboxBasicRenderer extends Evented {
 
   constructor(options) {
@@ -53,7 +52,6 @@ class MapboxBasicRenderer extends Evented {
     this._pendingRenders = new Map(); // tileSetID => render state
     this._nextRenderId = 0; // each new render state created has a unique renderId in addition to its tileSetID, which isn't unique
     this._configId = 0; // for use with async config changes..see setXYZ methods below
-    
     this.showCanvasForDebug();
   }
 
@@ -86,7 +84,7 @@ class MapboxBasicRenderer extends Evented {
     }
 
     this._tmpMat4f64 = this._tmpMat4f64 || new Float64Array(16); // reuse each time for GC's benefit
-    this._tmpMat4f32 = this._tmpMat4f32 || new Float32Array(16);
+    this._tmpMat4f32 = new Float32Array(16); // TODO(optimization): may want to use a pool for this rather than a new one each time
 
     // The main calculation...
     mat4.identity(this._tmpMat4f64);
@@ -194,8 +192,8 @@ class MapboxBasicRenderer extends Evented {
 
     let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity);
     let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity);
-    minLeft = Math.min(minLeft, drawSpec.srcLeft);
-    minTop = Math.min(minTop, drawSpec.srcTop);
+    //minLeft = Math.min(minLeft, drawSpec.srcLeft);
+    //minTop = Math.min(minTop, drawSpec.srcTop);
     
     return {
       tilesSpec: tilesSpec.map(s => ({
@@ -260,7 +258,6 @@ class MapboxBasicRenderer extends Evented {
     // any requests that have the same tileSetID can be coallesced into a single _pendingRender
     ({drawSpec, tilesSpec} = this._canonicalizeSpec(tilesSpec, drawSpec));
     let tileSetID = this._tileSpecToString(tilesSpec);
-    
     let consumer = {ctx, drawSpec, tilesSpec, next};
 
     // See if the tile set is already pending render, if so we don't need to do much...
@@ -294,7 +291,6 @@ class MapboxBasicRenderer extends Evented {
         if(!state || state.renderId !== renderId){
           return; // render for this tileGroupID has been canceled, or superceded.
         }
-
         // TODO: need to work out what this does
         this.transform.zoom = 16; 
         
@@ -307,7 +303,6 @@ class MapboxBasicRenderer extends Evented {
           t.top = s.top;
           this._style.sourceCaches[s.source].currentlyRenderingTiles.push(t);
         })
-
         // Work out the bounding box containing all src regions 
         let xSrcMin = state.consumers.map(c => c.drawSpec.srcLeft).reduce((a,b)=>Math.min(a,b),Infinity);
         let ySrcMin = state.consumers.map(c => c.drawSpec.srcTop).reduce((a,b)=>Math.min(a,b),Infinity);
@@ -321,7 +316,7 @@ class MapboxBasicRenderer extends Evented {
             // for the section of the imaginary canvas at (xx,yy) and of
             // size OFFSCREEN_CANV_SIZE x OFFSCREEN_CANV_SIZE, find the list
             // of relevant consumers.
-            var relevantConsumers = state.consumers.filter(c =>
+            let relevantConsumers = state.consumers.filter(c =>
               c.drawSpec.srcLeft + c.drawSpec.width > xx &&
               c.drawSpec.srcLeft < xx + OFFSCREEN_CANV_SIZE &&
               c.drawSpec.srcTop + c.drawSpec.height > yy && 
@@ -338,10 +333,6 @@ class MapboxBasicRenderer extends Evented {
               let srcRight = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcLeft + c.drawSpec.width - xx) | 0;
               let srcTop = Math.max(0, c.drawSpec.srcTop - yy) | 0;
               let srcBottom = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcTop + c.drawSpec.height - yy) | 0;
-              this._srcMarker.style.width = srcRight-srcLeft + 'px';
-              this._srcMarker.style.height = srcBottom-srcTop + 'px';
-              this._srcMarker.style.right = (OFFSCREEN_CANV_SIZE - srcRight) + 'px';
-              this._srcMarker.style.bottom = (OFFSCREEN_CANV_SIZE - srcBottom) + 'px';
               c.ctx.drawImage( 
                 this._canvas,
                 srcLeft, srcTop, srcRight-srcLeft, srcBottom-srcTop, // src: left, top, width, height
@@ -439,18 +430,11 @@ class MapboxBasicRenderer extends Evented {
     this._canvas.style.right = "0px";
     this._canvas.style.background = "#ccc";
     this._canvas.style.opacity = '0.7';
-    //this._canvas.style.transform = 'scale(0.5) translate(512px,512px)'
-
-    this._srcMarker = document.createElement('div');
-    document.body.appendChild(this._srcMarker);
-    this._srcMarker.style.position = "fixed";
-    this._srcMarker.style.border = "solid";
-    //this._srcMarker.style.transform = 'scale(0.5) translate(512px,512px)'
+    this._canvas.style.transform = 'scale(0.5) translate(502px,502px)'
 
   }
   destroyDebugCanvas(){
     document.body.removeChild(this._canvas);
-    document.body.removeChild(this._srcMarker);
   }
 
 }

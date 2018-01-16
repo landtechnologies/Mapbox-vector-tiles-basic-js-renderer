@@ -25,6 +25,7 @@ function parseTextAreas(){
   } catch(e){
     return alert("drawSpec parse error: " + e);
   }
+  drawSpec = Array.isArray(drawSpec) ? drawSpec : [drawSpec];
   try{
     style = JSON.parse(style);
   } catch(e){
@@ -40,8 +41,8 @@ function doIt(){
   // visualise everything's layout on the imaginary canvas :::::::::::::::::::::::::
   let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity);
   let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity);
-  minLeft = Math.min(minLeft, drawSpec.srcLeft) - 50;
-  minTop = Math.min(minTop, drawSpec.srcTop) - 50;
+  minLeft = drawSpec.map(s=>s.srcLeft).reduce((a,b) =>Math.min(a,b), minLeft) - 50;
+  minTop = drawSpec.map(s=>s.srcTop).reduce((a,b) => Math.min(a,b), minTop) - 50;
   let imaginaryCanvasEl = document.getElementById("imaginary-canvas");
   imaginaryCanvasEl.innerHTML = "";
 
@@ -61,30 +62,37 @@ function doIt(){
     imaginaryCanvasEl.appendChild(t);
   })
 
-  let src = document.createElement("div");
-  src.classList = "src";
-  src.style.left = (drawSpec.srcLeft - minLeft) + 'px';
-  src.style.top = (drawSpec.srcTop - minTop) + 'px';
-  src.style.width = drawSpec.width + 'px';
-  src.style.height = drawSpec.height + 'px';
-  let drawSpec2 = Object.assign({}, drawSpec);
-  delete drawSpec2.destTop;
-  delete drawSpec2.destLeft;
-  src.textContent = "drawSpec src: " + JSON.stringify(drawSpec2, null, 2);
-  imaginaryCanvasEl.appendChild(src);
-
+  drawSpec.forEach((d,ii) => {
+    let src = document.createElement("div");
+    src.classList = "src";
+    src.style.left = (d.srcLeft - minLeft) + 'px';
+    src.style.top = (d.srcTop - minTop) + 'px';
+    src.style.width = d.width + 'px';
+    src.style.height = d.height + 'px';
+    let drawSpec2 = Object.assign({}, d);
+    delete drawSpec2.destTop;
+    delete drawSpec2.destLeft;
+    src.textContent = "drawSpec[" + ii + "] src: " + JSON.stringify(drawSpec2, null, 2);
+    imaginaryCanvasEl.appendChild(src);
+  });
+ 
 
   // prepare the proper output canvas :::::::::::::::::::::::::::::::::::::::::
-  let dest = document.getElementById("dest");
-  let BORDER_WIDTH = 2;
-  dest.style.left = (drawSpec.destLeft - BORDER_WIDTH) + 'px';
-  dest.style.top = (drawSpec.destTop - BORDER_WIDTH) + 'px';
-  dest.style.width = drawSpec.width + 'px';
-  dest.style.height = drawSpec.height + 'px';
-  drawSpec2 = Object.assign({}, drawSpec);
-  delete drawSpec2.srcLeft;
-  delete drawSpec2.srcTop;
-  dest.textContent = "drawSpec dest: " + JSON.stringify(drawSpec2, null, 2);
+  let destWrapperEl = document.getElementById("dest-wrapper");
+  destWrapperEl.innerHTML = "";
+  drawSpec.forEach((d,ii) => {
+    let dest = document.createElement("div");
+    dest.classList = "dest";
+    dest.style.left = d.destLeft + 'px';
+    dest.style.top = d.destTop + 'px';
+    dest.style.width = d.width + 'px';
+    dest.style.height = d.height + 'px';
+    let drawSpec2 = Object.assign({}, d);
+    delete drawSpec2.srcLeft;
+    delete drawSpec2.srcTop;
+    dest.textContent = "drawSpec[" + ii + "] dest: " + JSON.stringify(drawSpec2, null, 2);
+    destWrapperEl.appendChild(dest);
+  });
 
   // perform the actual render ::::::::::::::::::::::::::::::::::::::::::::::::
   let realCanvasEl = document.getElementById("real-canvas");
@@ -96,10 +104,10 @@ function doIt(){
     if(data.dataType !== "style") {
       return;
     }
-    renderer.renderTiles(realCanvasEl.getContext('2d'),
-      drawSpec,
-      tilesSpec,
-      err => err ? console.error("renderTiles:" + err) : console.log("done rendering"));
+
+    drawSpec.forEach(d => renderer.renderTiles(realCanvasEl.getContext('2d'),
+      d, tilesSpec,
+      err => err ? console.error("renderTiles:" + err) : console.log("done rendering")));
   });
 }
 

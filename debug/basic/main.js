@@ -96,7 +96,6 @@ function doIt(){
 
   // perform the actual render ::::::::::::::::::::::::::::::::::::::::::::::::
   let realCanvasEl = document.getElementById("real-canvas");
-  realCanvasEl.width = 1024; // clear it
   window.renderer && window.renderer.destroyDebugCanvas();
   window.renderer = new BasicRenderer({style});
 

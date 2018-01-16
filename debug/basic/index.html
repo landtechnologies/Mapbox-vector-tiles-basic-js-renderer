@@ -151,8 +151,7 @@
 
     <section>
       <h4>drawSpec</h4>
-      Here you need to specify which section of the imaginary infinite canvas you want to copy to the real canvas <code>(destLeft, destTop,srcLeft,srcTop,width,height)</code>. As stated above, note that there is no particular origin in the imaginary infinite canvas, coordiantes are just relative to each other.  In this demo you can supply an array of <code>drawSpec</code>s, though
-      the <code>renderTiles</code> function itself only accepts one at a time.
+      Here you need to specify which section of the imaginary infinite canvas you want to copy to the real canvas <code>(destLeft, destTop,srcLeft,srcTop,width,height)</code>. As stated above, note that there is no particular origin in the imaginary infinite canvas, coordiantes are just relative to each other.  In this demo you can supply an array of <code>drawSpec</code>s, though the <code>renderTiles</code> function itself only accepts one at a time. You can also supply <code>{... clear: true}</code> if you want the <code>renderTiles</code> function to take responsibility for clearing anything before doing the render (it will do so at the last possible moment so that you shouldn't notice any flickering).
       <textarea rows="20" cols="80" id="drawSpecText">
 
       </textarea>

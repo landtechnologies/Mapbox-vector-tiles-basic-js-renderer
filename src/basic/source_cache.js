@@ -41,7 +41,7 @@ class BasicSourceCache {
     tile.uses++;
     this._tilesInUse[tileID.key] = tile;
 
-    tile.source = this._source; // redundant if tile is not new
+    tile.cache = this; // redundant if tile is not new
     if(!tile.loadedPromise){
       // We need to actually issue the load request, and express it as a promise...
       tile.loadedPromise = new Promise((res, rej) => 
@@ -83,7 +83,7 @@ class BasicSourceCache {
     // by removing the loadedPromise, we force a fresh load next time the tile
     // is needed...although note that "fresh" is only partial because the rawData
     // is still available.
-    Object.keys(this._tilesInUse).forEach(t => t.loadedPromise = null);
+    Object.values(this._tilesInUse).forEach(t => t.loadedPromise = null);
     this._tileCache.keys().forEach(id => this._tileCache.get(id).loadedPromise = null);
   }
   reload(){ }

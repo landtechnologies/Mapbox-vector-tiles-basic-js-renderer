@@ -46,13 +46,16 @@ class MapboxBasicRenderer extends Evented {
     };
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
-    this._style.on('data', e => (e.dataType === "style") && this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0})));
+    this._style.on('data', e => (e.dataType === "style") && this._onReady());
     this._createGlContext();
     this.painter.resize(OFFSCREEN_CANV_SIZE, OFFSCREEN_CANV_SIZE); 
     this._pendingRenders = new Map(); // tileSetID => render state
     this._nextRenderId = 0; // each new render state created has a unique renderId in addition to its tileSetID, which isn't unique
     this._configId = 0; // for use with async config changes..see setXYZ methods below
-    this.showCanvasForDebug();
+  }
+
+  _onReady(){
+    this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
   }
 
   _transformRequest(url, resourceType) {
@@ -181,7 +184,7 @@ class MapboxBasicRenderer extends Evented {
     clearTimeout(state.timeout);
     this._pendingRenders.delete(tileSetID);
     
-    err && state.tiles.forEach(t => t.source.releaseTile(t)); 
+    err && state.tiles.forEach(t => t.cache.releaseTile(t)); 
     // if the render is successful, then the responsibility for calling releaseRender lies elsewhere
   }
 
@@ -211,7 +214,8 @@ class MapboxBasicRenderer extends Evented {
         width: drawSpec.width,
         height: drawSpec.height,
         destLeft: drawSpec.destLeft,
-        destTop: drawSpec.destTop
+        destTop: drawSpec.destTop,
+        clear: drawSpec.clear
       }
     }
   }
@@ -228,7 +232,7 @@ class MapboxBasicRenderer extends Evented {
 
   releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
-    renderRef.tiles.forEach(t => t.source.releaseTile(t));
+    renderRef.tiles.forEach(t => t.cache.releaseTile(t));
     
     let state = this._pendingRenders.get(renderRef.tileSetID);
     if(!state || state.renderId !== renderRef.renderId){
@@ -326,19 +330,20 @@ class MapboxBasicRenderer extends Evented {
             }
 
             state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
-            this.painter.render(this._style, {showTileBoundaries: true, showOverdrawInspector: false});
+            this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
             relevantConsumers.forEach(c => {
               let srcLeft = Math.max(0, c.drawSpec.srcLeft-xx) | 0;
               let srcRight = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcLeft + c.drawSpec.width - xx) | 0;
               let srcTop = Math.max(0, c.drawSpec.srcTop - yy) | 0;
               let srcBottom = Math.min(OFFSCREEN_CANV_SIZE, c.drawSpec.srcTop + c.drawSpec.height - yy) | 0;
-              c.ctx.drawImage( 
-                this._canvas,
-                srcLeft, srcTop, srcRight-srcLeft, srcBottom-srcTop, // src: left, top, width, height
-                c.drawSpec.destLeft + (c.drawSpec.srcLeft<xx ? xx-c.drawSpec.srcLeft : 0), // destLeft
-                c.drawSpec.destTop + (c.drawSpec.srcTop<yy ? yy-c.drawSpec.srcTop : 0), // destTop 
-                srcRight-srcLeft, srcBottom-srcTop); // dest width, height
+              let destLeft = c.drawSpec.destLeft + (c.drawSpec.srcLeft<xx ? xx-c.drawSpec.srcLeft : 0);
+              let destTop = c.drawSpec.destTop + (c.drawSpec.srcTop<yy ? yy-c.drawSpec.srcTop : 0);
+              let width = srcRight-srcLeft;
+              let height = srcBottom-srcTop;
+
+              c.drawSpec.clear && c.ctx.clearRect(destLeft, destTop, width, height);
+              c.ctx.drawImage(this._canvas, srcLeft, srcTop, width, height, destLeft, destTop, width, height);
             });
           } // yy
         } // xx
@@ -434,7 +439,7 @@ class MapboxBasicRenderer extends Evented {
 
   }
   destroyDebugCanvas(){
-    document.body.removeChild(this._canvas);
+    renderer._canvas.parentElement && document.body.removeChild(this._canvas);
   }
 
 }

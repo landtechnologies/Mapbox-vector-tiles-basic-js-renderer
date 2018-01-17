@@ -45,10 +45,11 @@ class UnwrappedTileID {
     canonical: CanonicalTileID;
     key: number;
 
-    constructor(wrap: number, canonical: CanonicalTileID) {
+    constructor(wrap: number, canonical: CanonicalTileID, posMatrix) {
         this.wrap = wrap;
         this.canonical = canonical;
         this.key = calculateKey(wrap, canonical.z, canonical.x, canonical.y);
+        this.posMatrix = posMatrix
     }
 }
 
@@ -126,7 +127,7 @@ class OverscaledTileID {
     }
 
     toUnwrapped() {
-        return new UnwrappedTileID(this.wrap, this.canonical);
+        return new UnwrappedTileID(this.wrap, this.canonical, this.posMatrix);
     }
 
     toString() {

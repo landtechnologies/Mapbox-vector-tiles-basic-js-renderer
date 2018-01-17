@@ -28,8 +28,6 @@ void main() {
     float fade_opacity = v_data1[2];
 
     lowp float dist = texture2D(u_texture, tex).a;
-    lowp float fade_alpha = texture2D(u_fadetexture, fade_tex).a;
-
     float fontScale = u_is_text ? size / 24.0 : size;
 
     lowp vec4 color = fill_color;
@@ -37,12 +35,12 @@ void main() {
     lowp float buff = (256.0 - 64.0) / 256.0;
 
     highp float gamma_scaled = gamma * u_gamma_scale;
-    highp float alpha = smoothstep(buff - gamma_scaled, buff + gamma_scaled, dist) * fade_alpha;
+    highp float alpha = smoothstep(buff - gamma_scaled, buff + gamma_scaled, dist);
     if (u_has_halo) {
         gamma = (halo_blur * 1.19 / SDF_PX + EDGE_GAMMA) / (fontScale * u_gamma_scale);
         highp float gamma_scaled_halo = gamma * u_gamma_scale;
         lowp float buff_halo = (6.0 - halo_width / fontScale) / SDF_PX;
-        highp float alpha_halo = smoothstep(buff_halo - gamma_scaled, buff_halo + gamma_scaled, dist) * fade_alpha;
+        highp float alpha_halo = smoothstep(buff_halo - gamma_scaled, buff_halo + gamma_scaled, dist);
         color = mix(halo_color, color, alpha);
         alpha = alpha_halo;
     }

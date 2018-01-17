@@ -31,6 +31,9 @@ class BasicSourceCache {
   getVisibleCoordinates(){
     return this.currentlyRenderingTiles.map(t => t.tileID);
   }
+  getRenderableIds(){
+    return this.getVisibleCoordinates();
+  }
   acquireTile(tileID, size){
     // important: every call to acquireTile should be paired with a call to releaseTile
     // you can also manually increment tile.uses, however do not decrement it directly, instead
@@ -49,6 +52,9 @@ class BasicSourceCache {
     }
 
     return tile;
+  }
+  getTileByID(tileID){
+    return this.getTile(tileID); //alias
   }
   getTile(tileID){
     // note that the requested tile should actually also feature in currentlyRenderingTiles..but that's harder to query

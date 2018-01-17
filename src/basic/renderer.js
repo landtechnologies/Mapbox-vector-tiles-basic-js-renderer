@@ -42,7 +42,8 @@ class MapboxBasicRenderer extends Evented {
       width: OFFSCREEN_CANV_SIZE,
       height: OFFSCREEN_CANV_SIZE,
       pixelsToGLUnits: [2 / OFFSCREEN_CANV_SIZE, -2 / OFFSCREEN_CANV_SIZE],
-      tileZoom: (tile) => tile.tileID.canonical.z 
+      tileZoom: tile => tile.tileID.canonical.z,
+      calculatePosMatrix: tileID => tileID.posMatrix 
     };
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
@@ -232,8 +233,7 @@ class MapboxBasicRenderer extends Evented {
 
   releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
-    renderRef.tiles.forEach(t => t.cache.releaseTile(t));
-    
+     
     let state = this._pendingRenders.get(renderRef.tileSetID);
     if(!state || state.renderId !== renderRef.renderId){
       return; // tile was already rendered
@@ -295,9 +295,7 @@ class MapboxBasicRenderer extends Evented {
         if(!state || state.renderId !== renderId){
           return; // render for this tileGroupID has been canceled, or superceded.
         }
-        // TODO: need to work out what this does
-        this.transform.zoom = 16; 
-        
+
         // setup the list of currentlyRenderingTiles for each source
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
         tilesSpec.forEach((s,ii)=>{
@@ -307,6 +305,7 @@ class MapboxBasicRenderer extends Evented {
           t.top = s.top;
           this._style.sourceCaches[s.source].currentlyRenderingTiles.push(t);
         })
+
         // Work out the bounding box containing all src regions 
         let xSrcMin = state.consumers.map(c => c.drawSpec.srcLeft).reduce((a,b)=>Math.min(a,b),Infinity);
         let ySrcMin = state.consumers.map(c => c.drawSpec.srcTop).reduce((a,b)=>Math.min(a,b),Infinity);
@@ -330,6 +329,10 @@ class MapboxBasicRenderer extends Evented {
             }
 
             state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
+            // TODO: need to work out what this does
+            this.transform.zoom = 16; 
+            this._style._updatePlacement(this.transform, false, 0); // not sure how often this needs to be done
+
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
             relevantConsumers.forEach(c => {

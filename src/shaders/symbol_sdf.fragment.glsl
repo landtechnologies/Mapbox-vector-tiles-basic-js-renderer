@@ -9,12 +9,11 @@ uniform bool u_has_halo;
 #pragma mapbox: define lowp float halo_blur
 
 uniform sampler2D u_texture;
-uniform sampler2D u_fadetexture;
 uniform highp float u_gamma_scale;
 uniform bool u_is_text;
 
-varying vec4 v_data0;
-varying vec2 v_data1;
+varying vec2 v_data0;
+varying vec3 v_data1;
 
 void main() {
     #pragma mapbox: initialize highp vec4 fill_color
@@ -24,13 +23,11 @@ void main() {
     #pragma mapbox: initialize lowp float halo_blur
 
     vec2 tex = v_data0.xy;
-    vec2 fade_tex = v_data0.zw;
     float gamma_scale = v_data1.x;
     float size = v_data1.y;
+    float fade_opacity = v_data1[2];
 
     lowp float dist = texture2D(u_texture, tex).a;
-    lowp float fade_alpha = texture2D(u_fadetexture, fade_tex).a;
-
     float fontScale = u_is_text ? size / 24.0 : size;
 
     lowp vec4 color = fill_color;
@@ -38,17 +35,16 @@ void main() {
     lowp float buff = (256.0 - 64.0) / 256.0;
 
     highp float gamma_scaled = gamma * u_gamma_scale;
-    highp float alpha = smoothstep(buff - gamma_scaled, buff + gamma_scaled, dist) * fade_alpha;
+    highp float alpha = smoothstep(buff - gamma_scaled, buff + gamma_scaled, dist);
     if (u_has_halo) {
         gamma = (halo_blur * 1.19 / SDF_PX + EDGE_GAMMA) / (fontScale * u_gamma_scale);
         highp float gamma_scaled_halo = gamma * u_gamma_scale;
         lowp float buff_halo = (6.0 - halo_width / fontScale) / SDF_PX;
-        highp float alpha_halo = smoothstep(buff_halo - gamma_scaled, buff_halo + gamma_scaled, dist) * fade_alpha;
+        highp float alpha_halo = smoothstep(buff_halo - gamma_scaled, buff_halo + gamma_scaled, dist);
         color = mix(halo_color, color, alpha);
         alpha = alpha_halo;
     }
-
-    gl_FragColor = color * (alpha * opacity);
+    gl_FragColor = color * (alpha * opacity * fade_opacity);
 
 #ifdef OVERDRAW_INSPECTOR
     gl_FragColor = vec4(1.0);

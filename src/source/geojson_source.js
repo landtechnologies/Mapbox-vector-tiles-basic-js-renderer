@@ -5,11 +5,13 @@ const util = require('../util/util');
 const window = require('../util/window');
 const EXTENT = require('../data/extent');
 const ResourceType = require('../util/ajax').ResourceType;
+const browser = require('../util/browser');
 
 import type {Source} from './source';
 import type Map from '../ui/map';
 import type Dispatcher from '../util/dispatcher';
 import type Tile from './tile';
+import type {Callback} from '../types/callback';
 
 /**
  * A source containing GeoJSON.
@@ -93,7 +95,7 @@ class GeoJSONSource extends Evented implements Source {
         this.dispatcher = dispatcher;
         this.setEventedParent(eventedParent);
 
-        this._data = options.data;
+        this._data = (options.data: any);
         this._options = util.extend({}, options);
 
         if (options.maxzoom !== undefined) this.maxzoom = options.maxzoom;
@@ -186,39 +188,32 @@ class GeoJSONSource extends Evented implements Source {
     }
 
     loadTile(tile: Tile, callback: Callback<void>) {
-        const message = !tile.workerID || tile.state === 'expired' ? 'loadTile' : 'reloadTile';
+        const message = tile.workerID === undefined || tile.state === 'expired' ? 'loadTile' : 'reloadTile';
         const params = {
             type: this.type,
             uid: tile.uid,
-            coord: tile.coord,
-            zoom: tile.coord.z,
+            tileID: tile.tileID,
+            zoom: tile.tileID.overscaledZ,
             maxZoom: this.maxzoom,
             tileSize: this.tileSize,
             source: this.id,
-            overscaling: tile.coord.z > this.maxzoom ? Math.pow(2, tile.coord.z - this.maxzoom) : 1,
-            angle: this.map.transform.angle,
-            pitch: this.map.transform.pitch,
-            cameraToCenterDistance: this.map.transform.cameraToCenterDistance,
-            cameraToTileDistance: this.map.transform.cameraToTileDistance(tile),
+            pixelRatio: browser.devicePixelRatio,
+            overscaling: tile.tileID.overscaleFactor(),
             showCollisionBoxes: this.map.showCollisionBoxes
         };
 
         tile.workerID = this.dispatcher.send(message, params, (err, data) => {
             tile.unloadVectorData();
 
-            if (tile.aborted)
-                return;
+            if (tile.aborted) {
+                return callback(null);
+            }
 
             if (err) {
                 return callback(err);
             }
 
-            tile.loadVectorData(data, this.map.painter);
-
-            if (tile.redoWhenDone) {
-                tile.redoWhenDone = false;
-                tile.redoPlacement(this);
-            }
+            tile.loadVectorData(data, this.map.painter, message === 'reloadTile');
 
             return callback(null);
         }, this.workerID);
@@ -230,11 +225,11 @@ class GeoJSONSource extends Evented implements Source {
 
     unloadTile(tile: Tile) {
         tile.unloadVectorData();
-        this.dispatcher.send('removeTile', { uid: tile.uid, type: this.type, source: this.id }, () => {}, tile.workerID);
+        this.dispatcher.send('removeTile', { uid: tile.uid, type: this.type, source: this.id }, null, tile.workerID);
     }
 
     onRemove() {
-        this.dispatcher.broadcast('removeSource', { type: this.type, source: this.id }, () => {});
+        this.dispatcher.broadcast('removeSource', { type: this.type, source: this.id });
     }
 
     serialize() {
@@ -242,6 +237,10 @@ class GeoJSONSource extends Evented implements Source {
             type: this.type,
             data: this._data
         });
+    }
+
+    hasTransition() {
+        return false;
     }
 }
 

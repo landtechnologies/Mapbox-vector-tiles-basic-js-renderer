@@ -5,11 +5,13 @@ const util = require('../util/util');
 const featureFilter = require('../style-spec/feature_filter');
 const groupByLayout = require('../style-spec/group_by_layout');
 
+import type {TypedStyleLayer} from './style_layer/typed_style_layer';
+
 export type LayerConfigs = { [string]: LayerSpecification };
+export type Family<Layer: TypedStyleLayer> = Array<Layer>;
 
 class StyleLayerIndex {
-    symbolOrder: Array<string>;
-    familiesBySource: { [string]: { [string]: Array<Array<StyleLayer>> } };
+    familiesBySource: { [source: string]: { [sourceLayer: string]: Array<Family<*>> } };
 
     _layerConfigs: LayerConfigs;
     _layers: { [string]: StyleLayer };
@@ -21,31 +23,21 @@ class StyleLayerIndex {
     }
 
     replace(layerConfigs: Array<LayerSpecification>) {
-        this.symbolOrder = [];
-        for (const layerConfig of layerConfigs) {
-            if (layerConfig.type === 'symbol') {
-                this.symbolOrder.push(layerConfig.id);
-            }
-        }
         this._layerConfigs = {};
         this._layers = {};
         this.update(layerConfigs, []);
     }
 
-    update(layerConfigs: Array<LayerSpecification>, removedIds: Array<string>, symbolOrder: ?Array<string>) {
+    update(layerConfigs: Array<LayerSpecification>, removedIds: Array<string>) {
         for (const layerConfig of layerConfigs) {
             this._layerConfigs[layerConfig.id] = layerConfig;
 
             const layer = this._layers[layerConfig.id] = StyleLayer.create(layerConfig);
-            layer.updatePaintTransitions({}, {transition: false});
-            layer.filter = featureFilter(layer.filter);
+            layer._featureFilter = featureFilter(layer.filter);
         }
         for (const id of removedIds) {
             delete this._layerConfigs[id];
             delete this._layers[id];
-        }
-        if (symbolOrder) {
-            this.symbolOrder = symbolOrder;
         }
 
         this.familiesBySource = {};
@@ -56,7 +48,7 @@ class StyleLayerIndex {
             const layers = layerConfigs.map((layerConfig) => this._layers[layerConfig.id]);
 
             const layer = layers[0];
-            if (layer.layout && layer.layout.visibility === 'none') {
+            if (layer.visibility === 'none') {
                 continue;
             }
 

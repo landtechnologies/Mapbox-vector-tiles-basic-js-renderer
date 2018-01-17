@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Basic Vector Tile Rendering</title>
+    <style>
+    * {
+      box-sizing: border-box;
+    }
+    body{
+      display: flex;
+      flex-direction: row;
+      flex-align: start;
+      margin: 0;
+      overflow: hidden;
+    }
+    #settings{
+      height: 100vh;
+      padding: 10px;
+      width: 500px;
+      max-width: 800px;
+      overflow: auto;
+      flex-grow: 1;
+    }
+    #viz{
+      height: 100vh;
+      width: 500px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #imaginary-canvas{
+      height: 500px;
+      width: 100%;
+      overflow: auto;
+      position: relative;
+      background:url(
+        data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAHElEQVQYV2M8dOjQfwYcgBEkaWdnx4hNftBJAgDKQxtNM7DqxQAAAABJRU5ErkJggg==
+      ) repeat;
+      flex-grow: 1;
+    }
+    #real-canvas{
+      background: #eee;
+    }
+    #real-canvas-wrapper{
+      height: 500px;
+      width: 100%;
+      overflow: auto;
+      border-top: 3px solid #777;
+      flex-grow: 1;
+      position: relative;
+    }
+    textarea{
+      display: block;
+    }
+    .source-tile{
+      border: 1px solid black;
+      background: rgba(0,0,0,0.2);
+      position: absolute;
+      white-space: pre;
+      padding: 4px;
+    }
+    #dest-wrapper{
+      position: absolute;
+      width: auto;
+      height: auto;
+      top: 0px;
+      left: 0px;
+    }
+    .dest{
+      border: 2px solid red;
+      color: red;
+      font-weight: bold;
+      position: absolute;
+      white-space: pre;
+      padding: 4px;
+      overflow: visible;
+    }
+    .dest:before{
+      content: '';
+      height: 100%;
+      display: block;
+      padding: 4px;
+    }
+    .src{
+      border: 2px solid red;
+      background: rgba(255,0,0,0.6);
+      color: #5d1a1a;
+      font-weight: bold;
+      position: absolute;
+      white-space: pre;
+      padding: 4px;
+    }
+    .origin{
+      color: black;
+      font-weight: bold;
+      position: absolute;
+      top: 0px;
+      left: 0px;
+    }
+    #applyBtn{
+      font-size: 20px;
+      color: blue;
+      font-weight: bold;
+      padding: 10px 30px;
+      margin: 10px;
+      position: fixed;
+      top: 10px;
+      left: 250px;
+      cursor: pointer;
+    }
+    </style>
+
+  </head>
+  <body>
+
+  <div id="settings">
+    <h3>Basic Vector Tile Rendering</h3>
+
+    <h4>Introduction</h4>
+    This demo shows how to use the main <code>renderTiles</code> method on the <code>BasicRenderer</code>. This left hand pane has three text fields which expect JSON input (there is not much in the way of input validation, so be nice).  On the right, the top section shows the "imaginary canvas", with all its source tiles and the region which is going to be
+    "copied" from. And the bottom section on the right shows the "real output canvas" that the <code>renderTiles</code> method is actually trying to write to. Here the output canvas size is fixed at 1024x1024, but the imaginary canvas will grow as needed, based on your json specifications below.  Don't forget to hit the "apply changes" button to update things.
+    <br><br>
+
+
+    When testing locally, you can configure the defaults for the following text fields by modifying
+    the <code>defaults.js</code> file (use the command <code>git update-index --skip-worktree debug/basic/defaults.js</code> to ensure git ignores any changes you make).
+
+    <section>
+      <h4>Style</h4>
+      The renderer lets you update individual bits of the style without fully reloading, but
+      in this demo you can only give the full style and press "Apply" to create a new instance
+      of the renderer with this applied.
+      <textarea rows="20" cols="80" id="styleText">
+
+      </textarea>
+    </section>
+
+    <section>
+      <h4>tilesSpec</h4>
+      Here you need to specify an array of tiles that you want to render, for each tile you need
+      to state the name of the source (as defined in the "style" above) as well as the tile's <code>(z,x,y)</code>
+      values.  Then you need to state where the tile is to be rendered on our imaginary infinite canvas <code>(left,top,size)</code>.
+      There is no particular origin defined for left and top values, they are really just relative values across all the
+      tiles in this array and the values in <code>drawSpec</code> (below). Note that the order of tiles here is irrelevant to the proper render, but you may need to reorder them to see the debug info better on the right.
+      <textarea rows="20" cols="80" id="tilesSpecText">
+        
+      </textarea>
+    </section>
+
+    <section>
+      <h4>drawSpec</h4>
+      Here you need to specify which section of the imaginary infinite canvas you want to copy to the real canvas <code>(destLeft, destTop,srcLeft,srcTop,width,height)</code>. As stated above, note that there is no particular origin in the imaginary infinite canvas, coordiantes are just relative to each other.  In this demo you can supply an array of <code>drawSpec</code>s, though the <code>renderTiles</code> function itself only accepts one at a time. You can also supply <code>{... clear: true}</code> if you want the <code>renderTiles</code> function to take responsibility for clearing anything before doing the render (it will do so at the last possible moment so that you shouldn't notice any flickering).
+      <textarea rows="20" cols="80" id="drawSpecText">
+
+      </textarea>
+    </section>
+  </div>
+
+  <div id="viz">
+    <div id="imaginary-canvas"></div>
+    <div id="real-canvas-wrapper">
+      <canvas id="real-canvas" width="1024" height="1024" ></canvas>
+      <div id="dest-wrapper"></div>
+    </div>
+  </div>
+  <button id="applyBtn">Apply Changes</button>
+    
+  <script src="http://localhost:9998/main.build.js"></script>
+  </body>
+</html>

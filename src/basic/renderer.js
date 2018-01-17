@@ -5,20 +5,14 @@ const BasicPainter = require('./painter'),
       {OverscaledTileID} = require('../source/tile_id'),
       {mat4} = require('@mapbox/gl-matrix'),
       Source = require('../source/source'),
-      Point = require('point-geometry'),
       QueryFeatures = require('../source/query_features'),
-      SphericalMercator = require('@mapbox/sphericalmercator'),
       EvaluationParameters = require('../style/evaluation_parameters'),
-      Placement = require('../symbol/placement');
-
-window.BasicStyle = BasicStyle;
-var sphericalMercator = new SphericalMercator();
+      Placement = require('../symbol/placement'),
+      assert = require('assert');
 
 const DEFAULT_RESOLUTION = 256;
 const TILE_LOAD_TIMEOUT = 60000;
 const OFFSCREEN_CANV_SIZE = 1024; 
-
-var layerStylesheetFromLayer = layer => layer && layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
 
 class MapboxBasicRenderer extends Evented {
 
@@ -147,15 +141,24 @@ class MapboxBasicRenderer extends Evented {
       });
   }
 
-  getLayersVisible(zoom){
+  getLayersVisible(zoom, source){
     // if zoom is provided will filter by min/max zoom as well as by layer visibility
+    // and if source (string) is provided only style layers from that source will be returned.
+    let layerStylesheetFromLayer = layer => 
+      layer && layer._eventedParent.stylesheet.layers.find(x=>x.id===layer.id);
+
     return Object.keys(this._style._layers)
       .filter(lyr=>this._style.getLayoutProperty(lyr, 'visibility') === 'visible')
       .filter(lyr => {
         let layerStylesheet = layerStylesheetFromLayer(this._style._layers[lyr]);
-        return !zoom || (layerStylesheet && 
-          zoom >= layerStylesheet.minzoom_ &&
-          zoom <= layerStylesheet.maxzoom_);
+        return (
+          !zoom || (layerStylesheet         && 
+           zoom >= layerStylesheet.minzoom_ &&
+           zoom <= layerStylesheet.maxzoom_)   
+        ) && (
+          !source || (layerStylesheet       &&
+          layerStylesheet.source === source)
+        );
       });
   }
 
@@ -360,65 +363,19 @@ class MapboxBasicRenderer extends Evented {
     return {renderId: state.renderId, consumer, tiles: state.tiles};
   }
 
-  latLngToTileCoords(opts){
-    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ, false)
-                                  .map(x=>x/256 /* why 256? */);
-    let pointXY = tileXY.map(x => (x - (x|0)) * opts.extent);
-    return {
-      tileX: tileXY[0] |0,
-      tileY: tileXY[1] |0,
-      tileZ: opts.tileZ,
-      pointX: pointXY[0],
-      pointY: pointXY[1]
-    }
-  }
-
   queryRenderedFeatures(opts){
-    return {};
+    assert(opts.source);
 
     let layers = {};
-    this.getLayersVisible(opts.renderedZoom)
+    this.getLayersVisible(opts.renderedZoom, opts.source)
         .forEach(lyr => layers[lyr] = this._style._layers[lyr]);
 
-    let p = this.latLngToTileCoords(Object.assign({extent: EXTENT}, opts));
-
-    // collect the coordinates of the tile containing the given point, plus any with an overlapping buffer region
-    let tileIDs = []; 
-    let bufferSize = this._bufferZoneWidth/this._resolution * EXTENT; // measured in the same units as pointXY
-    tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY, 0));
-    // consider including the left, right, top, bottom adjacent tiles (if the point is near to the given edge)
-    (p.pointX<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY, 0));
-    (p.pointX>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY, 0));
-    (p.pointY<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY-1, 0));
-    (p.pointY>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX, p.tileY+1, 0));
-    // and consider including the 4 corner adjacent tiles (again, if the point is near the given corner)
-    (p.pointX<bufferSize && p.pointY<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY-1, 0));
-    (p.pointX<bufferSize && p.pointY>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX-1, p.tileY+1, 0));
-    (p.pointX>EXTENT - bufferSize && p.pointY<bufferSize)        && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY-1, 0));
-    (p.pointX>EXTENT - bufferSize && p.pointY>EXTENT-bufferSize) && tileIDs.push(new OverscaledTileID(p.tileZ, 0, p.tileZ, p.tileX+1, p.tileY+1, 0));
-    
-    // prepare the fake tileCache
-    let tilesIn = tileIDs
-      .map(c => ({
-        tile: this._tilesInUse[c.key],
-        tileID: c,
-        queryGeometry: [[Point.convert([
-          // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
-          p.pointX + EXTENT*(p.tileX-c.canonical.x),  
-          p.pointY + EXTENT*(p.tileY-c.canonical.y),
-        ])]],
-        scale: 1
-      }))
-      .filter(x => x.tile && x.tile.hasData()); // we are a bit lazy in terms of ensuring the data matches the rendered styles etc. 
-    let sourceCache = Object.create(this._style.sourceCaches.landinsight);
-    sourceCache.tilesIn = () => tilesIn;
-
     let featuresByRenderLayer = QueryFeatures.rendered(
-      sourceCache,
+      this._style.sourceCaches[opts.source],
       layers, 
-      null /* query geometry is pre-specified in tilesIn */, 
+      opts, 
       {}, opts.tileZ, 0);
-      
+
     let featuresBySourceLayer = {};
     Object.keys(featuresByRenderLayer)
       .forEach(renderLayerName => 

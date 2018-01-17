@@ -1,9 +1,13 @@
 const Cache = require('../util/lru_cache'),
       assert = require('assert'),
-      Tile = require('../source/tile');
+      Tile = require('../source/tile'),
+      Point = require('point-geometry'),
+      EXTENT = require('../data/extent'),
+      SphericalMercator = require('@mapbox/sphericalmercator');
+   
+let sphericalMercator = new SphericalMercator();
 
 const TILE_CACHE_SIZE = 100;
-
 
 
 /*
@@ -92,6 +96,30 @@ class BasicSourceCache {
     Object.values(this._tilesInUse).forEach(t => t.loadedPromise = null);
     this._tileCache.keys().forEach(id => this._tileCache.get(id).loadedPromise = null);
   }
+
+  tilesIn(opts){
+    let tileXY = sphericalMercator.px([opts.lng, opts.lat], opts.tileZ, false)
+                                  .map(x=>x/256 /* why 256? */);
+    let tileX = tileXY[0] |0;
+    let tileY = tileXY[1] |0;
+    let pointXY = tileXY.map(x => (x - (x|0)) * EXTENT);
+    let pointX = pointXY[0];
+    let pointY = pointXY[1];
+
+    return Object.values(this._tilesInUse)
+      .filter(t => t.hasData()) // we are a bit lazy in terms of ensuring the data matches the rendered styles etc. ..could check loadedPromise has resolved
+      .map(t => ({
+        tile: t,
+        tileID: t.tileID,
+        queryGeometry: [[Point.convert([
+          // for all but the 0th coord, we need to adjust the pointXY values to lie suitably outside the [0,EXTENT] range
+          pointX + EXTENT*(tileX-t.tileID.canonical.x),  
+          pointY + EXTENT*(tileY-t.tileID.canonical.y),
+        ])]],
+        scale: 1
+      }));
+  }
+
   reload(){ }
   pause(){ }
   resume(){ }

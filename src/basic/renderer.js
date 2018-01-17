@@ -329,8 +329,6 @@ class MapboxBasicRenderer extends Evented {
             }
 
             state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
-            // TODO: need to work out what this does
-            this.transform.zoom = 16; 
             this._style._updatePlacement(this.transform, false, 0); // not sure how often this needs to be done
 
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
@@ -356,6 +354,7 @@ class MapboxBasicRenderer extends Evented {
         }
         clearTimeout(state.timeout);
         this._pendingRenders.delete(tileSetID);
+        Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
       })
 
     return {renderId: state.renderId, consumer, tiles: state.tiles};

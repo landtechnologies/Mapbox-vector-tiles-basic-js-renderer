@@ -17,5 +17,5 @@ import type {OverscaledTileID} from './tile_id';
  * @private
  */
 module.exports = function(tile: {tileID: OverscaledTileID, tileSize: number}, pixelValue: number, z: number): number {
-    return pixelValue * (EXTENT / (tile.tileSize * Math.pow(2, z - tile.tileID.overscaledZ)));
+    return pixelValue * (EXTENT / tile.tileSize);
 };

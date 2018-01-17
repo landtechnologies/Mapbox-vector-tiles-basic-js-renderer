@@ -56,7 +56,7 @@ class MapboxBasicRenderer extends Evented {
   }
 
   _onReady(){
-    this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
+    this._style.update(new EvaluationParameters(16));
   }
 
   _transformRequest(url, resourceType) {
@@ -120,7 +120,7 @@ class MapboxBasicRenderer extends Evented {
     let configId = ++this._configId;
     return this._style.setPaintProperty(layer, prop, val)
       .then(() => {
-        this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
+        this._style.update(new EvaluationParameters(16));
         return () => this._configId === configId;
       });
   }
@@ -131,7 +131,7 @@ class MapboxBasicRenderer extends Evented {
     let configId = ++this._configId;
     return this._style.setFilter(layer, filter)
       .then(() => {
-        this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
+        this._style.update(new EvaluationParameters(16));
         return () => this._configId === configId;
       });
   }
@@ -142,7 +142,7 @@ class MapboxBasicRenderer extends Evented {
     let configId = ++this._configId;
     return this._style.setLayers(visibleLayers)
       .then(() => {
-        this._style.update(new EvaluationParameters(16, {transition: false, fadeDuration: 0}));
+        this._style.update(new EvaluationParameters(16));
         return () => this._configId === configId;
       });
   }

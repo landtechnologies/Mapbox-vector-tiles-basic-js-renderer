@@ -17581,6 +17581,7 @@ var Style = function (_Evented) {
             var placementChanged = false;
 
             var layerTiles = {};
+
             var _iteratorNormalCompletion6 = true;
             var _didIteratorError6 = false;
             var _iteratorError6 = undefined;
@@ -17589,13 +17590,13 @@ var Style = function (_Evented) {
                 for (var _iterator6 = this._order[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
                     var _layerID = _step6.value;
 
-                    var styleLayer = this._layers[_layerID];
-                    if (styleLayer.type !== 'symbol' /*|| styleLayer.visibility === 'none'*/) continue;
+                    var _styleLayer = this._layers[_layerID];
+                    if (_styleLayer.type !== 'symbol') continue;
 
-                    if (!layerTiles[styleLayer.source]) {
+                    if (!layerTiles[_styleLayer.source]) {
                         (function () {
-                            var sourceCache = _this9.sourceCaches[styleLayer.source];
-                            layerTiles[styleLayer.source] = sourceCache.getRenderableIds().map(function (id) {
+                            var sourceCache = _this9.sourceCaches[_styleLayer.source];
+                            layerTiles[_styleLayer.source] = sourceCache.getRenderableIds().map(function (id) {
                                 return sourceCache.getTileByID(id);
                             }).sort(function (a, b) {
                                 return b.tileID.overscaledZ - a.tileID.overscaledZ || (a.tileID.isLessThan(b.tileID) ? -1 : 1);
@@ -17603,7 +17604,7 @@ var Style = function (_Evented) {
                         })();
                     }
 
-                    var layerBucketsChanged = this.crossTileSymbolIndex.addLayer(styleLayer, layerTiles[styleLayer.source]);
+                    var layerBucketsChanged = this.crossTileSymbolIndex.addLayer(_styleLayer, layerTiles[_styleLayer.source]);
                     symbolBucketsChanged = symbolBucketsChanged || layerBucketsChanged;
                 }
 
@@ -17627,7 +17628,7 @@ var Style = function (_Evented) {
             }
 
             var forceFullPlacement = this._layerOrderChanged;
-            debugger;
+
             if (forceFullPlacement || !this.pauseablePlacement || this.pauseablePlacement.isDone() && !this.placement.stillRecent(browser.now())) {
                 this.pauseablePlacement = new PauseablePlacement(transform, this._order, forceFullPlacement, showCollisionBoxes, fadeDuration);
                 this._layerOrderChanged = false;
@@ -17665,9 +17666,9 @@ var Style = function (_Evented) {
                     for (var _iterator7 = this._order[Symbol.iterator](), _step7; !(_iteratorNormalCompletion7 = (_step7 = _iterator7.next()).done); _iteratorNormalCompletion7 = true) {
                         var layerID = _step7.value;
 
-                        var _styleLayer = this._layers[layerID];
-                        if (_styleLayer.type !== 'symbol') continue;
-                        this.placement.updateLayerOpacities(_styleLayer, layerTiles[_styleLayer.source]);
+                        var styleLayer = this._layers[layerID];
+                        if (styleLayer.type !== 'symbol') continue;
+                        this.placement.updateLayerOpacities(styleLayer, layerTiles[styleLayer.source]);
                     }
                 } catch (err) {
                     _didIteratorError7 = true;
@@ -38274,7 +38275,7 @@ var MapboxBasicRenderer = function (_Evented) {
         if (!state || state.renderId !== renderId) {
           return; // render for this tileGroupID has been canceled, or superceded.
         }
-        console.time("render tileSet");
+
         // setup the list of currentlyRenderingTiles for each source
         Object.values(_this8._style.sourceCaches).forEach(function (c) {
           return c.currentlyRenderingTiles = [];
@@ -38309,7 +38310,6 @@ var MapboxBasicRenderer = function (_Evented) {
           return Math.max(a, b);
         }, -Infinity);
 
-        var nIterations = 0;
         // iterate over OFFSCREEN_CANV_SIZE x OFFSCREEN_CANV_SIZE blocks of that bounding box
 
         var _loop = function _loop(xx) {
@@ -38324,7 +38324,7 @@ var MapboxBasicRenderer = function (_Evented) {
             if (relevantConsumers.length === 0) {
               return 'continue';
             }
-            nIterations++;
+
             state.tiles.forEach(function (t) {
               return t.tileID.posMatrix = _this8._calculatePosMatrix(t.left - xx, t.top - yy, t.tileSize);
             });
@@ -38364,9 +38364,6 @@ var MapboxBasicRenderer = function (_Evented) {
         Object.values(_this8._style.sourceCaches).forEach(function (c) {
           return c.currentlyRenderingTiles = [];
         });
-        console.timeEnd("render tileSet");
-        console.log(tileSetID);
-        console.log("nIterations: " + nIterations);
       });
 
       return { renderId: state.renderId, consumer: consumer, tiles: state.tiles };

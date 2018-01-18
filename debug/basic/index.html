@@ -110,6 +110,11 @@
       left: 250px;
       cursor: pointer;
     }
+    section{
+      border-bottom: 3px solid #ccc;
+      padding-bottom: 4px;
+      font-size: 1.1em;
+    }
     </style>
 
   </head>
@@ -118,17 +123,25 @@
   <div id="settings">
     <h3>Basic Vector Tile Rendering</h3>
 
-    <h4>Introduction</h4>
-    This demo shows how to use the main <code>renderTiles</code> method on the <code>BasicRenderer</code>. This left hand pane has three text fields which expect JSON input (there is not much in the way of input validation, so be nice).  On the right, the top section shows the "imaginary canvas", with all its source tiles and the region which is going to be
-    "copied" from. And the bottom section on the right shows the "real output canvas" that the <code>renderTiles</code> method is actually trying to write to. Here the output canvas size is fixed at 1024x1024, but the imaginary canvas will grow as needed, based on your json specifications below.  Don't forget to hit the "apply changes" button to update things.
-    <br><br>
+    <section id="intro">
+      <h4>Introduction</h4>
+      This is a demo of the "basic" vetor tile renderer that is a fork of <a href="https://github.com/mapbox/mapbox-gl-js" target="_blank">mapbox-gl-js</a>. Please see <a href="https://github.com/d1manson" target="_blank">my github profile</a> for contact details if you have questions etc.
+      <br><br>
+      Unlike other implementations of vector tiles, this renderer is not designed for rendering a fully
+      featured working map, instead its purpose is to give you fine grain control over rendering individual source tiles.  As described below, the idea is that you define the position of one or more source tiles on an imaginary infinite canvas, and then select a part of that imaginary canvas to actually render to a real canvas.  This might seem a bit strange, but it is fairly powerful - 
+      I have used it to build a fully-functioning <a href="https://developers.google.com/maps/documentation/javascript/maptypes" target="_blank">overlay for google maps</a> that works with vector tiles (demo coming soon). You could also use it to produce a gallery of lots of little bits of maps or of maps at different zoom levels.  Indeed if you do find it useful please let me know what it is you are using it for!
+      <br><br>
 
+      This demo shows how to use the main <code>renderTiles</code> method on the <code>BasicRenderer</code>. This left hand pane has three text fields which expect JSON input.  On the right, the top section shows the "imaginary canvas", with all its source tiles and the region which is going to be
+      "copied" from. And the bottom section on the right shows the "real output canvas" that the <code>renderTiles</code> method is actually trying to write to. Here the output canvas size is fixed at 1024x1024, but the imaginary canvas will grow as needed, based on your json specifications below.  Don't forget to hit the "apply changes" button to update things.
+      <br><br>
+      When testing locally, you can configure the defaults for the following text fields by modifying
+      the <code>defaults.js</code> file (use the command <code>git update-index --skip-worktree debug/basic/defaults.js</code> to ensure git ignores any changes you make).
+    </section>
 
-    When testing locally, you can configure the defaults for the following text fields by modifying
-    the <code>defaults.js</code> file (use the command <code>git update-index --skip-worktree debug/basic/defaults.js</code> to ensure git ignores any changes you make).
-
+ 
     <section>
-      <h4>Style</h4>
+      <h4>style</h4>
       The renderer lets you update individual bits of the style without fully reloading, but
       in this demo you can only give the full style and press "Apply" to create a new instance
       of the renderer with this applied.
@@ -151,7 +164,7 @@
 
     <section>
       <h4>drawSpec</h4>
-      Here you need to specify which section of the imaginary infinite canvas you want to copy to the real canvas <code>(destLeft, destTop,srcLeft,srcTop,width,height)</code>. As stated above, note that there is no particular origin in the imaginary infinite canvas, coordiantes are just relative to each other.  In this demo you can supply an array of <code>drawSpec</code>s, though the <code>renderTiles</code> function itself only accepts one at a time. You can also supply <code>{... clear: true}</code> if you want the <code>renderTiles</code> function to take responsibility for clearing anything before doing the render (it will do so at the last possible moment so that you shouldn't notice any flickering).
+      Here you need to specify which section of the imaginary infinite canvas you want to copy to the real canvas <code>(destLeft, destTop,srcLeft,srcTop,width,height)</code>. As stated above, note that there is no particular origin in the imaginary infinite canvas, coordiantes are just relative to each other.  In this demo you can supply an array of <code>drawSpec</code>s, though the <code>renderTiles</code> function itself only accepts one at a time. Note that here we have set <code>ctx.globalCompositeOperation = 'copy'</code> on the destination canvas contex - see <a href="https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation" target="_blank">here</a> for other options.
       <textarea rows="20" cols="80" id="drawSpecText">
 
       </textarea>

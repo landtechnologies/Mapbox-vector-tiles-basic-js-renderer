@@ -104,7 +104,9 @@ function doIt(){
       return;
     }
 
-    drawSpec.forEach(d => renderer.renderTiles(realCanvasEl.getContext('2d'),
+    let ctx = realCanvasEl.getContext('2d');
+    ctx.globalCompositeOperation = 'copy';
+    drawSpec.forEach(d => renderer.renderTiles(ctx,
       d, tilesSpec,
       err => err ? console.error("renderTiles:" + err) : console.log("done rendering")));
   });

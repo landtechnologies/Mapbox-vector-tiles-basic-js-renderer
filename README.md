@@ -1,3 +1,12 @@
+## Mapbox Vector Tile Basic Renderer
+
+**This is a fork of `mapbox-gl-js` by LandInsight.**
+
+Please see the readmes in `src/basic` and `/debug/basic` for details about this fork.
+
+---
+
+
 [<img width="400" alt="Mapbox" src="docs/pages/assets/logo.png">](https://www.mapbox.com/)
 
 **Mapbox GL JS** is a JavaScript library for interactive, customizable vector maps on the web. It takes map styles that conform to the

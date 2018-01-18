@@ -345,8 +345,6 @@ class MapboxBasicRenderer extends Evented {
               let destTop = c.drawSpec.destTop + (c.drawSpec.srcTop<yy ? yy-c.drawSpec.srcTop : 0);
               let width = srcRight-srcLeft;
               let height = srcBottom-srcTop;
-
-              c.ctx.globalCompositeOperation = c.drawSpec.clear ? 'copy' : 'source-over';
               c.ctx.drawImage(this._canvas, srcLeft, srcTop, width, height, destLeft, destTop, width, height);
             });
           } // yy

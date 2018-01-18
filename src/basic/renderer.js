@@ -218,8 +218,7 @@ class MapboxBasicRenderer extends Evented {
         width: drawSpec.width,
         height: drawSpec.height,
         destLeft: drawSpec.destLeft,
-        destTop: drawSpec.destTop,
-        clear: drawSpec.clear
+        destTop: drawSpec.destTop
       }
     }
   }

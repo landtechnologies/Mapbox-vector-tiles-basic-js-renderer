@@ -1,10 +1,14 @@
-## Mapbox Vector Tile Basic Renderer
+# Mapbox Vector Tile Basic JS Renderer
 
 **This is a fork of `mapbox-gl-js` by LandInsight.**
 
-Please see the readmes in `src/basic` and `/debug/basic` for details about this fork.
+**Please see the readmes in `src/basic` and `/debug/basic` for details about this fork.**
+
+**A live demo is available [here](https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/debug/basic/).**
 
 ---
+
+Original readme...
 
 
 [<img width="400" alt="Mapbox" src="docs/pages/assets/logo.png">](https://www.mapbox.com/)

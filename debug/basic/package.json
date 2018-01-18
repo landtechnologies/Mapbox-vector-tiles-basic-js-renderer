@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.html",
   "scripts": {
-    "dev": "webpack-dev-server -d --content-base ./bin --port 9998 --inline"
+    "dev": "webpack-dev-server -d --content-base ./bin --port 9998 --inline",
+    "build": "webpack"
   },
   "author": "daniel@landinsight.io",
   "license": "ISC",

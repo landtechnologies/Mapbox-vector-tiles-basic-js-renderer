@@ -10,5 +10,6 @@ The full summary of differences is as follows (not all of these differences are 
 * The halo around text is rendered in the same pass as the text itself.
 * You can use `FORMAT_NUMBER(...)` in text fields..see code in `../util/token.js`.
 * We don't care about Flow or tests here.
+* We don't bother with fancy anti-collision placement of symbols
 
 If you have questions, please see the contact details on my github profile page [here](https://github.com/d1manson).

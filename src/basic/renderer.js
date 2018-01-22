@@ -11,7 +11,6 @@ const BasicPainter = require('./painter'),
       assert = require('assert');
 
 const DEFAULT_RESOLUTION = 256;
-const TILE_LOAD_TIMEOUT = 60000;
 const OFFSCREEN_CANV_SIZE = 1024; 
 
 class MapboxBasicRenderer extends Evented {
@@ -191,7 +190,6 @@ class MapboxBasicRenderer extends Evented {
     while(state.consumers.length){
       state.consumers.shift().next(err);
     }
-    clearTimeout(state.timeout);
     this._pendingRenders.delete(tileSetID);
     
     err && state.tiles.forEach(t => t.cache.releaseTile(t)); 
@@ -205,8 +203,6 @@ class MapboxBasicRenderer extends Evented {
 
     let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity);
     let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity);
-    //minLeft = Math.min(minLeft, drawSpec.srcLeft);
-    //minTop = Math.min(minTop, drawSpec.srcTop);
     
     return {
       tilesSpec: tilesSpec.map(s => ({
@@ -241,8 +237,7 @@ class MapboxBasicRenderer extends Evented {
 
   releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
-     
-    let state = this._pendingRenders.get(renderRef.tileSetID);
+   let state = this._pendingRenders.get(renderRef.tileSetID);
     if(!state || state.renderId !== renderRef.renderId){
       return; // tile was already rendered
     } 
@@ -250,7 +245,6 @@ class MapboxBasicRenderer extends Evented {
     renderRef.consumer.next("canceled");
     let idx = state.consumers.indexOf(renderRef.consumer);
     (idx !== -1) && state.consumers.splice(idx,1); 
-
     // if there are no consumers left then clean-up the render
     (state.consumers.length === 0) && this._finishRender(state.tileSetID, renderRef.renderId, "fully-canceled");    
   }
@@ -279,7 +273,7 @@ class MapboxBasicRenderer extends Evented {
     if(state){
       state.tiles.forEach(t => t.uses++);
       state.consumers.push(consumer);
-      return {renderId: state.renderId, consumer, tiles: state.tiles};
+      return {renderId: state.renderId, consumer, tiles: state.tiles, tileSetID};
     }
 
     // Ok, well we need to create a new pending render (which may include creating & loading new tiles)...
@@ -288,11 +282,10 @@ class MapboxBasicRenderer extends Evented {
       tileSetID,
       renderId, 
       tiles: tilesSpec.map(s => {
-        let tileID = new OverscaledTileID(s.z, 0, s.z, s.x, s.y, 0);
+        let tileID = new OverscaledTileID(s.z, 0, s.z, s.x/*+(s.x%3==1? 10000 : 0)*/, s.y, 0);
         return this._style.sourceCaches[s.source].acquireTile(tileID, s.size); // includes .uses++
       }),
-      consumers: [consumer],
-      timeout: setTimeout(() => this._finishRender(tileSetID, renderId, "timeout"), TILE_LOAD_TIMEOUT) // might want to do this per-tile in the sourceCache
+      consumers: [consumer]
     };
     this._pendingRenders.set(tileSetID, state);
 
@@ -306,13 +299,14 @@ class MapboxBasicRenderer extends Evented {
         if(!state || state.renderId !== renderId){
           return; // render for this tileGroupID has been canceled, or superceded.
         }
+        let err = badTileIdxs.length ? `${badTileIdxs.length} of ${tilesSpec.length} tiles not available` : null;
 
         // special case the condition where there are no tiles requested/available
         if(tilesSpec.length - badTileIdxs.length === 0){
           // this assumes globalCompositeOperation = 'copy', need to do something else otherwise
           state.consumers
             .forEach(c => c.ctx.clearRect(drawSpec.destLeft, drawSpec.destTop, drawSpec.width, drawSpec.height));
-          this._finishRender(tileSetID, renderId);
+          this._finishRender(tileSetID, renderId, err);
           return;
         }
 
@@ -371,14 +365,13 @@ class MapboxBasicRenderer extends Evented {
         } // xx
         
         while(state.consumers.length){
-          state.consumers.shift().next();
+          state.consumers.shift().next(err);
         }
-        clearTimeout(state.timeout);
         this._pendingRenders.delete(tileSetID);
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
       })
 
-    return {renderId: state.renderId, consumer, tiles: state.tiles};
+    return {renderId: state.renderId, consumer, tiles: state.tiles, tileSetID};
   }
 
   queryRenderedFeatures(opts){

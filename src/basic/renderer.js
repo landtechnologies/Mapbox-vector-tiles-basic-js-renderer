@@ -246,7 +246,7 @@ class MapboxBasicRenderer extends Evented {
     (idx !== -1) && state.consumers.splice(idx,1); 
 
     // if there are no consumers left then clean-up the render
-    (state.consumers.length === 0) && this._finishRender(state.tileGroupID, renderRef.renderId, "fully-canceled");    
+    (state.consumers.length === 0) && this._finishRender(state.tileSetID, renderRef.renderId, "fully-canceled");    
   }
 
   renderTiles(ctx, drawSpec, tilesSpec, next){
@@ -258,8 +258,13 @@ class MapboxBasicRenderer extends Evented {
     // the returned token must be passed to releaseRender at some point
 
 
-    // need to filter sourceSpec based on which source layers we actually need with the current settings
     // note that each consumer adds an extra use++ to each source tile of relevance.
+
+    // work our which source layers are actually needed for the current style layers,
+    // and ditch any irrelevant tiles in the tilespec
+    let neededSources = Object.keys(this._style.sourceCaches)
+      .filter(s => this.getLayersVisible(this.painter._filterForZoomm, s).length > 0);
+    tilesSpec = tilesSpec.filter(s => neededSources.includes(s.source));
 
     // any requests that have the same tileSetID can be coallesced into a single _pendingRender
     ({drawSpec, tilesSpec} = this._canonicalizeSpec(tilesSpec, drawSpec));

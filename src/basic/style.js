@@ -32,9 +32,9 @@ class BasicStyle extends Style {
     // Note this is not part of mapbox style, but handy to put it here for use with pending-style    
     return this._loadedPromise
       .then(() => Object.keys(this._layers)
-        .forEach(layerName => 
+        .map(layerName => 
         this.setLayoutProperty(layerName, 'visibility', 
-          visibleLayerNames.indexOf(layerName) > -1 ? 'visible' : 'none')
+          visibleLayerNames.includes(layerName) ? 'visible' : 'none')
       ));
   }
 

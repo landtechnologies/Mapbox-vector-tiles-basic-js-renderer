@@ -162,6 +162,12 @@ class MapboxBasicRenderer extends Evented {
       });
   }
 
+  getVisibleSources(zoom){
+    // list of sources with style layers that are visible, optionaly using the zoom to refine the visibility
+    return Object.keys(this._style.sourceCaches)
+      .filter(s => this.getLayersVisible(this.painter._filterForZoom, s).length > 0);
+  }
+
   filterForZoom(zoom){
     if(zoom === this.painter._filterForZoom){
       return;
@@ -260,12 +266,9 @@ class MapboxBasicRenderer extends Evented {
 
     // note that each consumer adds an extra use++ to each source tile of relevance.
 
-    // work our which source layers are actually needed for the current style layers,
-    // and ditch any irrelevant tiles in the tilespec
-    let neededSources = Object.keys(this._style.sourceCaches)
-      .filter(s => this.getLayersVisible(this.painter._filterForZoomm, s).length > 0);
-    tilesSpec = tilesSpec.filter(s => neededSources.includes(s.source));
-
+    // it is recomended that the caller use .getVisibleSources to limit the list of entries in
+    // tilesSpec when appropriate. We don't re-do that filtering work here.
+   
     // any requests that have the same tileSetID can be coallesced into a single _pendingRender
     ({drawSpec, tilesSpec} = this._canonicalizeSpec(tilesSpec, drawSpec));
     let tileSetID = this._tileSpecToString(tilesSpec);
@@ -294,8 +297,9 @@ class MapboxBasicRenderer extends Evented {
     this._pendingRenders.set(tileSetID, state);
 
     // once all the tiles are loaded we can then execute the pending render...
-    Promise.all(state.tiles.map(t => t.loadedPromise))
-      // TODO: if one or more tiles is unavailable we could still carry on with the render I suppose, but need to release the bad tiles so we dont try and use them
+    let badTileIdxs = [];
+    Promise.all(state.tiles
+        .map((t,ii) => t.loadedPromise.catch(err => badTileIdxs.push(ii))))
       .catch(err => this._finishRender(tileSetID, renderId, err)) // will delete the pendingRender so the next promise's initial check will fail
       .then(() => {
         state = this._pendingRenders.get(tileSetID);
@@ -303,9 +307,21 @@ class MapboxBasicRenderer extends Evented {
           return; // render for this tileGroupID has been canceled, or superceded.
         }
 
+        // special case the condition where there are no tiles requested/available
+        if(tilesSpec.length - badTileIdxs.length === 0){
+          // this assumes globalCompositeOperation = 'copy', need to do something else otherwise
+          state.consumers
+            .forEach(c => c.ctx.clearRect(drawSpec.destLeft, drawSpec.destTop, drawSpec.width, drawSpec.height));
+          this._finishRender(tileSetID, renderId);
+          return;
+        }
+
         // setup the list of currentlyRenderingTiles for each source
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
-        tilesSpec.forEach((s,ii)=>{
+        tilesSpec.forEach((s,ii) => {
+          if(badTileIdxs.includes(ii)){
+            return;
+          }
           let t = state.tiles[ii];
           t.tileSize = s.size;
           t.left = s.left;

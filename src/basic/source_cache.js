@@ -61,7 +61,12 @@ class BasicSourceCache {
         }, TILE_LOAD_TIMEOUT);
         this._source.loadTile(tile, err => {
           clearTimeout(timeout);
-          err ? rej(err) : res()
+          if(err){
+            this.loadedPromise = null;
+            rej(err);
+          } else {
+            res();
+          }
         });
       });
     }
@@ -83,9 +88,7 @@ class BasicSourceCache {
   }
   releaseTile(tile){
     assert(tile.uses > 0);
-
-    tile.uses--;
-    if(tile.uses > 0){
+    if(--tile.uses > 0){
       return;
     }
     delete this._tilesInUse[tile.tileID.key];

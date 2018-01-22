@@ -183,17 +183,18 @@ class MapboxBasicRenderer extends Evented {
   }
 
   _finishRender(tileSetID, renderId, err){ 
+    // each consumer must call releaseRender at some point, either before this is called or after.
+    // regardless of whether or not there was an error. 
+
     let state = this._pendingRenders.get(tileSetID);
     if(!state || state.renderId !== renderId){
       return; // render for this tile has been canceled, or superceded.
     }
+
     while(state.consumers.length){
       state.consumers.shift().next(err);
     }
-    this._pendingRenders.delete(tileSetID);
-    
-    err && state.tiles.forEach(t => t.cache.releaseTile(t)); 
-    // if the render is successful, then the responsibility for calling releaseRender lies elsewhere
+    this._pendingRenders.delete(tileSetID);  
   }
 
   _canonicalizeSpec(tilesSpec, drawSpec){
@@ -233,18 +234,19 @@ class MapboxBasicRenderer extends Evented {
       .join(" ");
   }
 
-
-
   releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
-   let state = this._pendingRenders.get(renderRef.tileSetID);
+    let state = this._pendingRenders.get(renderRef.tileSetID);
+    renderRef.tiles.forEach(t => t.cache.releaseTile(t));
+
     if(!state || state.renderId !== renderRef.renderId){
       return; // tile was already rendered
     } 
     
     renderRef.consumer.next("canceled");
     let idx = state.consumers.indexOf(renderRef.consumer);
-    (idx !== -1) && state.consumers.splice(idx,1); 
+    (idx !== -1) && state.consumers.splice(idx, 1);
+
     // if there are no consumers left then clean-up the render
     (state.consumers.length === 0) && this._finishRender(state.tileSetID, renderRef.renderId, "fully-canceled");    
   }
@@ -282,7 +284,7 @@ class MapboxBasicRenderer extends Evented {
       tileSetID,
       renderId, 
       tiles: tilesSpec.map(s => {
-        let tileID = new OverscaledTileID(s.z, 0, s.z, s.x/*+(s.x%3==1? 10000 : 0)*/, s.y, 0);
+        let tileID = new OverscaledTileID(s.z, 0, s.z, s.x, s.y, 0);
         return this._style.sourceCaches[s.source].acquireTile(tileID, s.size); // includes .uses++
       }),
       consumers: [consumer]
@@ -346,8 +348,6 @@ class MapboxBasicRenderer extends Evented {
             }
 
             state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
-            //this._style._updatePlacement(this.transform, false, 0); // not sure how often this needs to be done
-
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
             relevantConsumers.forEach(c => {

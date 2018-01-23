@@ -46,6 +46,7 @@ class MapboxBasicRenderer extends Evented {
     this._pendingRenders = new Map(); // tileSetID => render state
     this._nextRenderId = 0; // each new render state created has a unique renderId in addition to its tileSetID, which isn't unique
     this._configId = 0; // for use with async config changes..see setXYZ methods below
+    this._queuedConfigChanges = [];
   }
 
   _onReady(){
@@ -108,37 +109,54 @@ class MapboxBasicRenderer extends Evented {
     this.painter.style = this._style;
   }
 
+  // For the following 4 methods, note that the change is pushed into a queue
+  // and a function is returned to the caller. At a suitable point, the caller
+  // should call the function to try processing the queue. The function itself
+  // returns a promise that resolves to true if it was the most recent change,
+  // or to false otehrwise.
   setPaintProperty(layer, prop, val){
-    this._cancelAllPendingRenders();
-    let configId = ++this._configId;
-    return this._style.setPaintProperty(layer, prop, val)
-      .then(() => {
-        this._style.update(new EvaluationParameters(16));
-        return () => this._configId === configId;
-      });
+    this._queuedConfigChanges.push(() => this._style.setPaintProperty(layer, prop, val));
+    return () => this._processConfigQueue(++this._configId);
   }
 
   setFilter(layer, filter){
     // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
-    this._cancelAllPendingRenders();
-    let configId = ++this._configId;
-    return this._style.setFilter(layer, filter)
-      .then(() => {
-        this._style.update(new EvaluationParameters(16));
-        return () => this._configId === configId;
-      });
+    this._queuedConfigChanges.push(() => this._style.setFilter(layer, filterl));
+    return () => this._processConfigQueue(++this._configId);
   }
  
-  // takes an array of layer names to show
+  setLayerVisibility(layerName, isVisible){
+    this._queuedConfigChanges.push(() => this._style.setLayoutProperty(layerName, isVisible ? 'visible' : 'none'));
+    return () => this._processConfigQueue(++this._configId); 
+  }
+
   setLayers(visibleLayers){
-    this._cancelAllPendingRenders();
-    let configId = ++this._configId;
-    return this._style.setLayers(visibleLayers)
+    // takes an array of layer names to show
+    this._queuedConfigChanges.push(() => this._style.setLayers(visibleLayers));
+    return () => this._processConfigQueue(++this._configId);
+  }
+
+  _processConfigQueue(calledByConfigId){
+    // only the most recently submitted configId is allowed to actually
+    // trigger the changes, and will resolve to true. All the others will 
+    // resolve to false.
+
+    this._style.loadedPromise
       .then(() => {
+        if(this._configId !== calledByConfigId){
+          return false;
+        }
+        this._cancelAllPendingRenders();
+        while(this._queuedConfigChanges.length){
+          this._queuedConfigChanges.shift()();
+        }
         this._style.update(new EvaluationParameters(16));
-        return () => this._configId === configId;
+        return true;
       });
   }
+  
+  // =============
+
 
   getLayersVisible(zoom, source){
     // if zoom is provided will filter by min/max zoom as well as by layer visibility

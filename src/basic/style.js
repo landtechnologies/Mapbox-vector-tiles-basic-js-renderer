@@ -7,8 +7,8 @@ const Style = require('../style/style'),
 class BasicStyle extends Style {
   constructor(stylesheet, map, options){
     super(map, options);
-    this._loadedPromise = new Promise(res => this.on('data', e => e.dataType === "style" && res()));
-    this._loadedPromise.then(() => this.placement = new Placement(map.transform, 0));
+    this.loadedPromise = new Promise(res => this.on('data', e => e.dataType === "style" && res()));
+    this.loadedPromise.then(() => this.placement = new Placement(map.transform, 0));
     this.loadJSON(stylesheet);
   }
 
@@ -19,23 +19,17 @@ class BasicStyle extends Style {
     source_.tiles = source.tiles;
     this.sourceCaches[id] = new BasicSourceCache(source_);
   }
-
-  setPaintProperty(layer, prop, val){
-    return this._loadedPromise.then(() => super.setPaintProperty(layer, prop, val));      
-  }
-
-  setFilter(layer, filter){
-    return this._loadedPromise.then(() => super.setFilter(layer, filter));   
-  }
+  
+  // setLayers, and all other methods on the super, e.g. setPaintProperty, should be called
+  // via loadedPromise.then, not synchrounsouly 
 
   setLayers(visibleLayerNames){
     // Note this is not part of mapbox style, but handy to put it here for use with pending-style    
-    return this._loadedPromise
-      .then(() => Object.keys(this._layers)
-        .map(layerName => 
+    return Object.keys(this._layers)
+      .map(layerName => 
         this.setLayoutProperty(layerName, 'visibility', 
           visibleLayerNames.includes(layerName) ? 'visible' : 'none')
-      ));
+      );
   }
 
 };

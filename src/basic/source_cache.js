@@ -50,27 +50,29 @@ class BasicSourceCache {
     this._tilesInUse[tileID.key] = tile;
 
     tile.cache = this; // redundant if tile is not new
-    if(!tile.loadedPromise){
-      // We need to actually issue the load request, and express it as a promise...
-      tile.loadedPromise = new Promise((res, rej) => {
-        // note that we don't touch the .uses counter here on errors
-        let timeout = setTimeout(() => {
-          this._source.abortTile(tile);
-          tile.loadedPromise = null;
-          rej("timeout");
-        }, TILE_LOAD_TIMEOUT);
-        this._source.loadTile(tile, err => {
-          clearTimeout(timeout);
-          if(err){
-            this.loadedPromise = null;
-            rej(err);
-          } else {
-            res();
-          }
-        });
-      });
+    if(tile.loadedPromise){
+      return tile;
     }
 
+    // We need to actually issue the load request, and express it as a promise...
+    tile.loadedPromise = new Promise((res, rej) => {
+      // note that we don't touch the .uses counter here on errors
+      let timeout = setTimeout(() => {
+        this._source.abortTile(tile);
+        tile.loadedPromise = null;
+        rej("timeout");
+      }, TILE_LOAD_TIMEOUT);
+      this._source.loadTile(tile, err => {
+        clearTimeout(timeout);
+        if(err){
+          this.loadedPromise = null;
+          rej(err);
+        } else {
+          res();
+        }
+      });
+    });
+  
     return tile;
   }
   getTileByID(tileID){

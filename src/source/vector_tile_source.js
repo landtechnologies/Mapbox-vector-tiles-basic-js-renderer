@@ -140,6 +140,7 @@ class VectorTileSource extends Evented implements Source {
     unloadTile(tile: Tile) {
         tile.unloadVectorData();
         this.dispatcher.send('removeTile', { uid: tile.uid, type: this.type, source: this.id }, undefined, tile.workerID);
+        tile.workerID = undefined;
     }
 
     hasTransition() {

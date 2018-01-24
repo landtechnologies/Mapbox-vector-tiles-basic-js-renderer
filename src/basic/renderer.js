@@ -160,6 +160,7 @@ class MapboxBasicRenderer extends Evented {
           this._queuedConfigChanges.shift()();
         }
         this._style.update(new EvaluationParameters(16));
+        this.fire('configChanged');
         return true;
       });
   }

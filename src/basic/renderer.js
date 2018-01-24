@@ -109,31 +109,40 @@ class MapboxBasicRenderer extends Evented {
     this.painter.style = this._style;
   }
 
-  // For the following 4 methods, note that the change is pushed into a queue
-  // and a function is returned to the caller. At a suitable point, the caller
-  // should call the function to try processing the queue. The function itself
-  // returns a promise that resolves to true if it was the most recent change,
-  // or to false otehrwise.
-  setPaintProperty(layer, prop, val){
+  /* For the following 4 methods the return value depends on the flag exec:
+      + when exec=true, the function returns a promise that resolves once the 
+      requested change has taken effect. If the value of the promise is true it
+      means that this config change was the most recent change, when false it
+      means another config change was requested after this one, and that the other
+      one has also taken effect.
+      + when exec=false, instead of returning a promise, a function is returned
+      and that function must be called in order to get the promise as described above.
+      This is useful for when you want to debounce a number of config changes and
+      separate the enquing of changes from the actual execution of the changes. */
+  setPaintProperty(layer, prop, val, exec=true){
     this._queuedConfigChanges.push(() => this._style.setPaintProperty(layer, prop, val));
-    return () => this._processConfigQueue(++this._configId);
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
   }
 
-  setFilter(layer, filter){
+  setFilter(layer, filter, exec=true){
     // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
-    this._queuedConfigChanges.push(() => this._style.setFilter(layer, filterl));
-    return () => this._processConfigQueue(++this._configId);
+    this._queuedConfigChanges.push(() => this._style.setFilter(layer, filter));
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
   }
  
-  setLayerVisibility(layerName, isVisible){
-    this._queuedConfigChanges.push(() => this._style.setLayoutProperty(layerName, isVisible ? 'visible' : 'none'));
-    return () => this._processConfigQueue(++this._configId); 
+  setLayerVisibility(layer, isVisible, exec=true){
+    this._queuedConfigChanges.push(() => this._style.setLayoutProperty(layer, 'visibility', isVisible ? 'visible' : 'none'));
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
   }
 
-  setLayers(visibleLayers){
+  setLayers(visibleLayers, exec=true){
     // takes an array of layer names to show
     this._queuedConfigChanges.push(() => this._style.setLayers(visibleLayers));
-    return () => this._processConfigQueue(++this._configId);
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
   }
 
   _processConfigQueue(calledByConfigId){
@@ -141,7 +150,7 @@ class MapboxBasicRenderer extends Evented {
     // trigger the changes, and will resolve to true. All the others will 
     // resolve to false.
 
-    this._style.loadedPromise
+    return this._style.loadedPromise
       .then(() => {
         if(this._configId !== calledByConfigId){
           return false;
@@ -154,7 +163,7 @@ class MapboxBasicRenderer extends Evented {
         return true;
       });
   }
-  
+
   // =============
 
 

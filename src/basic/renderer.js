@@ -38,6 +38,7 @@ class MapboxBasicRenderer extends Evented {
       tileZoom: tile => tile.tileID.canonical.z,
       calculatePosMatrix: tileID => tileID.posMatrix 
     };
+    this._initStyle = options.style;
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._onReady());
@@ -187,6 +188,16 @@ class MapboxBasicRenderer extends Evented {
           layerStylesheet.source === source)
         );
       });
+  }
+
+  getLayerOriginalFilter(layerName){
+    let layer = this._initStyle.layers.find(lyr => lyr.id === layerName);
+    return layer && layer.filter;
+  }
+
+  getLayerOriginalPaint(layerName){
+    let layer = this._initStyle.layers.find(lyr => lyr.id === layerName);
+    return layer && layer.paint;
   }
 
   getVisibleSources(zoom){

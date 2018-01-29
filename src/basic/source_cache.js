@@ -65,7 +65,7 @@ class BasicSourceCache {
       this._source.loadTile(tile, err => {
         clearTimeout(timeout);
         if(err){
-          this.loadedPromise = null;
+          tile._isDud = true; // we can consider it to "have data", i.e. we will let it go into the cache
           rej(err);
         } else {
           res();
@@ -94,7 +94,7 @@ class BasicSourceCache {
       return;
     }
     delete this._tilesInUse[tile.tileID.key];
-    if(tile.hasData()){
+    if(tile.hasData() || this._isDud){
       // this tile is worth keeping...
       this._tileCache.add(tile.tileID.key, tile);
     } else {
@@ -109,8 +109,11 @@ class BasicSourceCache {
     // by removing the loadedPromise, we force a fresh load next time the tile
     // is needed...although note that "fresh" is only partial because the rawData
     // is still available.
-    Object.values(this._tilesInUse).forEach(t => t.loadedPromise = null);
-    this._tileCache.keys().forEach(id => this._tileCache.get(id).loadedPromise = null);
+    Object.values(this._tilesInUse).forEach(t => !t._isDud && (t.loadedPromise = null));
+    this._tileCache.keys().forEach(id => {
+      let tile = this._tileCache.get(id);
+      !tile._isDud && (tile.loadedPromise = null);
+    });
   }
 
   tilesIn(opts){

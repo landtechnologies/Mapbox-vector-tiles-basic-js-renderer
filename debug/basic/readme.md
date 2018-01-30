@@ -4,4 +4,4 @@ It can be run simply by opening `index.html` in your browser. It should also be 
 
 If you want to modify the code and build it locally, you need to be aware that this fork uses webpack to build mapbox rather than browserify, as in the original. The build is also done as part of the demo, rather than using a pre-built js file.
 
-See the readme in `../src/basic` for further details.
+See the root readme for further details.

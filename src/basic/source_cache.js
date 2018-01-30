@@ -9,6 +9,7 @@ let sphericalMercator = new SphericalMercator();
 
 const TILE_CACHE_SIZE = 100;
 
+const TILE_LOAD_TIMEOUT = 60*1000;
 
 /*
   This "owns" tiles, with each tile existing in at most one of the following two places:
@@ -49,12 +50,29 @@ class BasicSourceCache {
     this._tilesInUse[tileID.key] = tile;
 
     tile.cache = this; // redundant if tile is not new
-    if(!tile.loadedPromise){
-      // We need to actually issue the load request, and express it as a promise...
-      tile.loadedPromise = new Promise((res, rej) => 
-        this._source.loadTile(tile, err => err ? rej(err) : res()));
+    if(tile.loadedPromise){
+      return tile;
     }
 
+    // We need to actually issue the load request, and express it as a promise...
+    tile.loadedPromise = new Promise((res, rej) => {
+      // note that we don't touch the .uses counter here on errors
+      let timeout = setTimeout(() => {
+        this._source.abortTile(tile);
+        tile.loadedPromise = null;
+        rej("timeout");
+      }, TILE_LOAD_TIMEOUT);
+      this._source.loadTile(tile, err => {
+        clearTimeout(timeout);
+        if(err){
+          tile._isDud = true; // we can consider it to "have data", i.e. we will let it go into the cache
+          rej(err);
+        } else {
+          res();
+        }
+      });
+    });
+  
     return tile;
   }
   getTileByID(tileID){
@@ -72,13 +90,11 @@ class BasicSourceCache {
   }
   releaseTile(tile){
     assert(tile.uses > 0);
-
-    tile.uses--;
-    if(tile.uses > 0){
+    if(--tile.uses > 0){
       return;
     }
     delete this._tilesInUse[tile.tileID.key];
-    if(tile.hasData()){
+    if(tile.hasData() || this._isDud){
       // this tile is worth keeping...
       this._tileCache.add(tile.tileID.key, tile);
     } else {
@@ -93,8 +109,11 @@ class BasicSourceCache {
     // by removing the loadedPromise, we force a fresh load next time the tile
     // is needed...although note that "fresh" is only partial because the rawData
     // is still available.
-    Object.values(this._tilesInUse).forEach(t => t.loadedPromise = null);
-    this._tileCache.keys().forEach(id => this._tileCache.get(id).loadedPromise = null);
+    Object.values(this._tilesInUse).forEach(t => !t._isDud && (t.loadedPromise = null));
+    this._tileCache.keys().forEach(id => {
+      let tile = this._tileCache.get(id);
+      !tile._isDud && (tile.loadedPromise = null);
+    });
   }
 
   tilesIn(opts){

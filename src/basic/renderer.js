@@ -11,7 +11,6 @@ const BasicPainter = require('./painter'),
       assert = require('assert');
 
 const DEFAULT_RESOLUTION = 256;
-const TILE_LOAD_TIMEOUT = 60000;
 const OFFSCREEN_CANV_SIZE = 1024; 
 
 class MapboxBasicRenderer extends Evented {
@@ -39,6 +38,7 @@ class MapboxBasicRenderer extends Evented {
       tileZoom: tile => tile.tileID.canonical.z,
       calculatePosMatrix: tileID => tileID.posMatrix 
     };
+    this._initStyle = options.style;
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});
     this._style.on('data', e => (e.dataType === "style") && this._onReady());
@@ -47,6 +47,7 @@ class MapboxBasicRenderer extends Evented {
     this._pendingRenders = new Map(); // tileSetID => render state
     this._nextRenderId = 0; // each new render state created has a unique renderId in addition to its tileSetID, which isn't unique
     this._configId = 0; // for use with async config changes..see setXYZ methods below
+    this._queuedConfigChanges = [];
   }
 
   _onReady(){
@@ -109,37 +110,64 @@ class MapboxBasicRenderer extends Evented {
     this.painter.style = this._style;
   }
 
-  setPaintProperty(layer, prop, val){
-    this._cancelAllPendingRenders();
-    let configId = ++this._configId;
-    return this._style.setPaintProperty(layer, prop, val)
+  /* For the following 4 methods the return value depends on the flag exec:
+      + when exec=true, the function returns a promise that resolves once the 
+      requested change has taken effect. If the value of the promise is true it
+      means that this config change was the most recent change, when false it
+      means another config change was requested after this one, and that the other
+      one has also taken effect.
+      + when exec=false, instead of returning a promise, a function is returned
+      and that function must be called in order to get the promise as described above.
+      This is useful for when you want to debounce a number of config changes and
+      separate the enquing of changes from the actual execution of the changes. */
+  setPaintProperty(layer, prop, val, exec=true){
+    this._queuedConfigChanges.push(() => this._style.setPaintProperty(layer, prop, val));
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
+  }
+
+  setFilter(layer, filter, exec=true){
+    // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
+    this._queuedConfigChanges.push(() => this._style.setFilter(layer, filter));
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
+  }
+ 
+  setLayerVisibility(layer, isVisible, exec=true){
+    this._queuedConfigChanges.push(() => this._style.setLayoutProperty(layer, 'visibility', isVisible ? 'visible' : 'none'));
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
+  }
+
+  setLayers(visibleLayers, exec=true){
+    // takes an array of layer names to show
+    this._queuedConfigChanges.push(() => this._style.setLayers(visibleLayers));
+    return exec ? this._processConfigQueue(++this._configId)
+                : () => this._processConfigQueue(++this._configId);
+  }
+
+  _processConfigQueue(calledByConfigId){
+    // only the most recently submitted configId is allowed to actually
+    // trigger the changes, and will resolve to true. All the others will 
+    // resolve to false.
+
+    return this._style.loadedPromise
       .then(() => {
+        if(this._configId !== calledByConfigId){
+          return false;
+        }
+        this._cancelAllPendingRenders();
+        while(this._queuedConfigChanges.length){
+          this._queuedConfigChanges.shift()();
+        }
         this._style.update(new EvaluationParameters(16));
-        return () => this._configId === configId;
+        this.fire('configChanged');
+        return true;
       });
   }
 
-  setFilter(layer, filter){
-    // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
-    this._cancelAllPendingRenders();
-    let configId = ++this._configId;
-    return this._style.setFilter(layer, filter)
-      .then(() => {
-        this._style.update(new EvaluationParameters(16));
-        return () => this._configId === configId;
-      });
-  }
- 
-  // takes an array of layer names to show
-  setLayers(visibleLayers){
-    this._cancelAllPendingRenders();
-    let configId = ++this._configId;
-    return this._style.setLayers(visibleLayers)
-      .then(() => {
-        this._style.update(new EvaluationParameters(16));
-        return () => this._configId === configId;
-      });
-  }
+  // =============
+
 
   getLayersVisible(zoom, source){
     // if zoom is provided will filter by min/max zoom as well as by layer visibility
@@ -162,6 +190,22 @@ class MapboxBasicRenderer extends Evented {
       });
   }
 
+  getLayerOriginalFilter(layerName){
+    let layer = this._initStyle.layers.find(lyr => lyr.id === layerName);
+    return layer && layer.filter;
+  }
+
+  getLayerOriginalPaint(layerName){
+    let layer = this._initStyle.layers.find(lyr => lyr.id === layerName);
+    return layer && layer.paint;
+  }
+
+  getVisibleSources(zoom){
+    // list of sources with style layers that are visible, optionaly using the zoom to refine the visibility
+    return Object.keys(this._style.sourceCaches)
+      .filter(s => this.getLayersVisible(this.painter._filterForZoom, s).length > 0);
+  }
+
   filterForZoom(zoom){
     if(zoom === this.painter._filterForZoom){
       return;
@@ -178,18 +222,18 @@ class MapboxBasicRenderer extends Evented {
   }
 
   _finishRender(tileSetID, renderId, err){ 
+    // each consumer must call releaseRender at some point, either before this is called or after.
+    // regardless of whether or not there was an error. 
+
     let state = this._pendingRenders.get(tileSetID);
     if(!state || state.renderId !== renderId){
       return; // render for this tile has been canceled, or superceded.
     }
+
     while(state.consumers.length){
       state.consumers.shift().next(err);
     }
-    clearTimeout(state.timeout);
-    this._pendingRenders.delete(tileSetID);
-    
-    err && state.tiles.forEach(t => t.cache.releaseTile(t)); 
-    // if the render is successful, then the responsibility for calling releaseRender lies elsewhere
+    this._pendingRenders.delete(tileSetID);  
   }
 
   _canonicalizeSpec(tilesSpec, drawSpec){
@@ -199,8 +243,6 @@ class MapboxBasicRenderer extends Evented {
 
     let minLeft = tilesSpec.map(s=>s.left).reduce((a,b)=>Math.min(a,b),Infinity);
     let minTop = tilesSpec.map(s=>s.top).reduce((a,b)=>Math.min(a,b), Infinity);
-    //minLeft = Math.min(minLeft, drawSpec.srcLeft);
-    //minTop = Math.min(minTop, drawSpec.srcTop);
     
     return {
       tilesSpec: tilesSpec.map(s => ({
@@ -231,22 +273,21 @@ class MapboxBasicRenderer extends Evented {
       .join(" ");
   }
 
-
-
   releaseRender(renderRef){
     // call this when the rendered thing is no longer on screen (it could happen long after the render finishes, or before it finishes).
-     
     let state = this._pendingRenders.get(renderRef.tileSetID);
+    renderRef.tiles.forEach(t => t.cache.releaseTile(t));
+
     if(!state || state.renderId !== renderRef.renderId){
       return; // tile was already rendered
     } 
     
     renderRef.consumer.next("canceled");
     let idx = state.consumers.indexOf(renderRef.consumer);
-    (idx !== -1) && state.consumers.splice(idx,1); 
+    (idx !== -1) && state.consumers.splice(idx, 1);
 
     // if there are no consumers left then clean-up the render
-    (state.consumers.length === 0) && this._finishRender(state.tileGroupID, renderRef.renderId, "fully-canceled");    
+    (state.consumers.length === 0) && this._finishRender(state.tileSetID, renderRef.renderId, "fully-canceled");    
   }
 
   renderTiles(ctx, drawSpec, tilesSpec, next){
@@ -258,9 +299,11 @@ class MapboxBasicRenderer extends Evented {
     // the returned token must be passed to releaseRender at some point
 
 
-    // need to filter sourceSpec based on which source layers we actually need with the current settings
     // note that each consumer adds an extra use++ to each source tile of relevance.
 
+    // it is recomended that the caller use .getVisibleSources to limit the list of entries in
+    // tilesSpec when appropriate. We don't re-do that filtering work here.
+   
     // any requests that have the same tileSetID can be coallesced into a single _pendingRender
     ({drawSpec, tilesSpec} = this._canonicalizeSpec(tilesSpec, drawSpec));
     let tileSetID = this._tileSpecToString(tilesSpec);
@@ -271,7 +314,7 @@ class MapboxBasicRenderer extends Evented {
     if(state){
       state.tiles.forEach(t => t.uses++);
       state.consumers.push(consumer);
-      return {renderId: state.renderId, consumer, tiles: state.tiles};
+      return {renderId: state.renderId, consumer, tiles: state.tiles, tileSetID};
     }
 
     // Ok, well we need to create a new pending render (which may include creating & loading new tiles)...
@@ -283,24 +326,37 @@ class MapboxBasicRenderer extends Evented {
         let tileID = new OverscaledTileID(s.z, 0, s.z, s.x, s.y, 0);
         return this._style.sourceCaches[s.source].acquireTile(tileID, s.size); // includes .uses++
       }),
-      consumers: [consumer],
-      timeout: setTimeout(() => this._finishRender(tileSetID, renderId, "timeout"), TILE_LOAD_TIMEOUT) // might want to do this per-tile in the sourceCache
+      consumers: [consumer]
     };
     this._pendingRenders.set(tileSetID, state);
 
     // once all the tiles are loaded we can then execute the pending render...
-    Promise.all(state.tiles.map(t => t.loadedPromise))
-      // TODO: if one or more tiles is unavailable we could still carry on with the render I suppose, but need to release the bad tiles so we dont try and use them
+    let badTileIdxs = [];
+    Promise.all(state.tiles
+        .map((t,ii) => t.loadedPromise.catch(err => badTileIdxs.push(ii))))
       .catch(err => this._finishRender(tileSetID, renderId, err)) // will delete the pendingRender so the next promise's initial check will fail
       .then(() => {
         state = this._pendingRenders.get(tileSetID);
         if(!state || state.renderId !== renderId){
           return; // render for this tileGroupID has been canceled, or superceded.
         }
+        let err = badTileIdxs.length ? `${badTileIdxs.length} of ${tilesSpec.length} tiles not available` : null;
+
+        // special case the condition where there are no tiles requested/available
+        if(tilesSpec.length - badTileIdxs.length === 0){
+          // this assumes globalCompositeOperation = 'copy', need to do something else otherwise
+          state.consumers
+            .forEach(c => c.ctx.clearRect(drawSpec.destLeft, drawSpec.destTop, drawSpec.width, drawSpec.height));
+          this._finishRender(tileSetID, renderId, err);
+          return;
+        }
 
         // setup the list of currentlyRenderingTiles for each source
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
-        tilesSpec.forEach((s,ii)=>{
+        tilesSpec.forEach((s,ii) => {
+          if(badTileIdxs.includes(ii)){
+            return;
+          }
           let t = state.tiles[ii];
           t.tileSize = s.size;
           t.left = s.left;
@@ -331,8 +387,6 @@ class MapboxBasicRenderer extends Evented {
             }
 
             state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
-            this._style._updatePlacement(this.transform, false, 0); // not sure how often this needs to be done
-
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
             relevantConsumers.forEach(c => {
@@ -350,14 +404,13 @@ class MapboxBasicRenderer extends Evented {
         } // xx
         
         while(state.consumers.length){
-          state.consumers.shift().next();
+          state.consumers.shift().next(err);
         }
-        clearTimeout(state.timeout);
         this._pendingRenders.delete(tileSetID);
         Object.values(this._style.sourceCaches).forEach(c => c.currentlyRenderingTiles = []);
       })
 
-    return {renderId: state.renderId, consumer, tiles: state.tiles};
+    return {renderId: state.renderId, consumer, tiles: state.tiles, tileSetID};
   }
 
   queryRenderedFeatures(opts){

@@ -25,7 +25,6 @@ void main() {
     vec2 tex = v_data0.xy;
     float gamma_scale = v_data1.x;
     float size = v_data1.y;
-    float fade_opacity = v_data1[2];
 
     lowp float dist = texture2D(u_texture, tex).a;
     float fontScale = u_is_text ? size / 24.0 : size;
@@ -44,7 +43,7 @@ void main() {
         color = mix(halo_color, color, alpha);
         alpha = alpha_halo;
     }
-    gl_FragColor = color * (alpha * opacity * fade_opacity);
+    gl_FragColor = color * (alpha * opacity);
 
 #ifdef OVERDRAW_INSPECTOR
     gl_FragColor = vec4(1.0);

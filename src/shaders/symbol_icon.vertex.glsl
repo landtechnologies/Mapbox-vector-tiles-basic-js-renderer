@@ -3,7 +3,6 @@ const float PI = 3.141592653589793;
 attribute vec4 a_pos_offset;
 attribute vec4 a_data;
 attribute vec3 a_projected_pos;
-attribute float a_fade_opacity;
 
 uniform bool u_is_size_zoom_constant;
 uniform bool u_is_size_feature_constant;
@@ -27,7 +26,6 @@ uniform bool u_pitch_with_map;
 uniform vec2 u_texsize;
 
 varying vec2 v_tex;
-varying float v_fade_opacity;
 
 void main() {
     #pragma mapbox: initialize lowp float opacity
@@ -82,7 +80,4 @@ void main() {
     gl_Position = u_gl_coord_matrix * vec4(projected_pos.xy / projected_pos.w + rotation_matrix * (a_offset / 64.0 * fontScale), 0.0, 1.0);
 
     v_tex = a_tex / u_texsize;
-    vec2 fade_opacity = unpack_opacity(a_fade_opacity);
-    float fade_change = fade_opacity[1] > 0.5 ? u_fade_change : -u_fade_change;
-    v_fade_opacity = max(0.0, min(1.0, fade_opacity[0] + fade_change));
 }

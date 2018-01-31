@@ -9,14 +9,18 @@ fairly up-to-date with the upstream version, and ideally (though this is not cur
 
 ## Introduction
 
-**A live demo is available [here](https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/debug/basic/).**
+**A live demo of basic tile rendering is available [here](https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/debug/basic/), and a demo of vector tiles on a google map is [here](https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/debug/basic/google)**
 
+Screenshots from the basic tile rendering demo...
+<img  alt="Mapbox" src="docs/pages/assets/rendertiles.png">
+
+And screenshots from the vector tiles on a google map demo...
 <img  alt="Mapbox" src="docs/pages/assets/rendertiles.png">
 
 Unlike other implementations of vector tiles, this renderer is not designed for rendering a fully
 featured working map, instead its purpose is to give you fine grain control over rendering individual source tiles.  The idea is that you define the position of one or more source tiles on an imaginary infinite canvas, and then select a part of that imaginary canvas to actually render onto a real canvas.  
 
-With this arrangement, you can do several things with a set of vector tiles, in particular you can create a vector-tile [overlay for google maps]("https://developers.google.com/maps/documentation/javascript/maptypes) [TODO: open source code and provide demo].  
+With this arrangement, you can do several things with a set of vector tiles, in particular you can create a vector-tile [overlay for google maps]("https://developers.google.com/maps/documentation/javascript/maptypes) - see live demo linked above, and code in `debug/basic/mapbox_google_overlay.js`.
 
 If you find this project useful please, let us know what you are using it for (we are curious)!
 

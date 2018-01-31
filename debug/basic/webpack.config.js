@@ -6,6 +6,10 @@ module.exports = {
     'main': [
       'babel-polyfill',
       './main.js'
+    ],
+    'google': [
+      'babel-polyfill',
+      './google.js'
     ]
   },
   output: {
@@ -40,12 +44,9 @@ module.exports = {
       {
         test: /\.js$/,
         loader: 'babel-loader',
-        include: [
-          __dirname,
-          path.resolve(__dirname, "../../src"),
-        ],
         query: {
-          plugins: ["transform-flow-comments", "transform-class-properties"]
+          presets: ["es2015"],
+          plugins: ["transform-flow-comments" , "transform-class-properties"].map(p => path.resolve(__dirname, 'node_modules', 'babel-plugin-' + p))
         }
 
       }

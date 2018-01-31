@@ -181,8 +181,8 @@ class MapboxBasicRenderer extends Evented {
         let layerStylesheet = layerStylesheetFromLayer(this._style._layers[lyr]);
         return (
           !zoom || (layerStylesheet         && 
-           zoom >= layerStylesheet.minzoom_ &&
-           zoom <= layerStylesheet.maxzoom_)   
+           (layerStylesheet.minzoom_ === undefined || zoom >= layerStylesheet.minzoom_) &&
+           (layerStylesheet.maxzoom_ === undefined || zoom <= layerStylesheet.maxzoom_))   
         ) && (
           !source || (layerStylesheet       &&
           layerStylesheet.source === source)

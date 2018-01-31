@@ -1,4 +1,5 @@
 export default {
+  availableZooms: {"openmaptiles": [14]}, // only used in google demo
 
   tilesSpec: [ 
     {source: "openmaptiles", z: 14, x: 8195, y: 5452, top: 0, left: 0, size: 256},
@@ -25,9 +26,7 @@ export default {
     "openmaptiles": {
       "type": "vector",
       "tiles":["https://free.tilehosting.com/data/v3/{z}/{x}/{y}.pbf.pict?key=tXiQqN3lIgskyDErJCeY"],
-      "name":"OpenMapTiles",
-      minzoom: 12,
-      maxzoom: 16
+      "name":"OpenMapTiles"
     }
   },
   "sprite": "https://rawgit.com/lukasmartinelli/osm-liberty/gh-pages/sprites/osm-liberty",

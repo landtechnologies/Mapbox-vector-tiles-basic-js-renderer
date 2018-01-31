@@ -60,7 +60,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 670);
+/******/ 	return __webpack_require__(__webpack_require__.s = 672);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -62863,23 +62863,25 @@ exports.default = {
 };
 
 /***/ }),
-/* 670 */
+/* 670 */,
+/* 671 */,
+/* 672 */
 /***/ (function(module, exports, __webpack_require__) {
 
 __webpack_require__(166);
-module.exports = __webpack_require__(671);
+module.exports = __webpack_require__(673);
 
 
 /***/ }),
-/* 671 */
+/* 673 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var _renderer = __webpack_require__(469);
+var _mapbox_google_overlay = __webpack_require__(674);
 
-var _renderer2 = _interopRequireDefault(_renderer);
+var _mapbox_google_overlay2 = _interopRequireDefault(_mapbox_google_overlay);
 
 var _defaults = __webpack_require__(669);
 
@@ -62887,145 +62889,381 @@ var _defaults2 = _interopRequireDefault(_defaults);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-window.BasicRenderer = _renderer2.default;
-
-function parseTextAreas() {
-  var tilesSpec = window.tilesSpec = document.getElementById("tilesSpecText").value;
-  var drawSpec = window.drawSpec = document.getElementById("drawSpecText").value;
-  var style = window.style = document.getElementById("styleText").value;
-  try {
-    tilesSpec = JSON.parse(tilesSpec);
-  } catch (e) {
-    return alert("tileSpec parse error: " + e);
-  }
-  if (!Array.isArray(tilesSpec)) {
-    return alert("tilesSpec needs to be an array");
-  }
-  if (!tilesSpec.every(function (s) {
-    return s.source && s.z > 0 && s.x > 0 && s.y > 0 && Number.isFinite(s.top) && Number.isFinite(s.left) && Number.isFinite(s.size);
-  })) {
-    return alert("Bad tileSpec..one or more elements do not have the expected numerical fields");
-  }
-  try {
-    drawSpec = JSON.parse(drawSpec);
-  } catch (e) {
-    return alert("drawSpec parse error: " + e);
-  }
-  drawSpec = Array.isArray(drawSpec) ? drawSpec : [drawSpec];
-  try {
-    style = JSON.parse(style);
-  } catch (e) {
-    return alert("style parse error: " + e);
-  }
-  return { tilesSpec: tilesSpec, drawSpec: drawSpec, style: style };
-}
-
-function doIt() {
-  var _parseTextAreas = parseTextAreas(),
-      tilesSpec = _parseTextAreas.tilesSpec,
-      drawSpec = _parseTextAreas.drawSpec,
-      style = _parseTextAreas.style;
-
-  // visualise everything's layout on the imaginary canvas :::::::::::::::::::::::::
-
-
-  var minLeft = tilesSpec.map(function (s) {
-    return s.left;
-  }).reduce(function (a, b) {
-    return Math.min(a, b);
-  }, Infinity);
-  var minTop = tilesSpec.map(function (s) {
-    return s.top;
-  }).reduce(function (a, b) {
-    return Math.min(a, b);
-  }, Infinity);
-  minLeft = drawSpec.map(function (s) {
-    return s.srcLeft;
-  }).reduce(function (a, b) {
-    return Math.min(a, b);
-  }, minLeft) - 50;
-  minTop = drawSpec.map(function (s) {
-    return s.srcTop;
-  }).reduce(function (a, b) {
-    return Math.min(a, b);
-  }, minTop) - 50;
-  var imaginaryCanvasEl = document.getElementById("imaginary-canvas");
-  imaginaryCanvasEl.innerHTML = "";
-
-  var origin = document.createElement("div");
-  origin.textContent = "'{left: " + minLeft + ", top: " + minTop + "}";
-  origin.classList = 'origin';
-  imaginaryCanvasEl.appendChild(origin);
-
-  tilesSpec.forEach(function (s, ii) {
-    var t = document.createElement("div");
-    t.classList = "source-tile";
-    t.style.left = s.left - minLeft + 'px';
-    t.style.top = s.top - minTop + 'px';
-    t.style.width = s.size + 'px';
-    t.style.height = s.size + 'px';
-    t.textContent = 'tilesSpec[' + ii + ']:\n' + JSON.stringify(s, null, 2);
-    imaginaryCanvasEl.appendChild(t);
+window.initMap = function () {
+  // this is called when google maps js is loaded
+  var map = window.map = new google.maps.Map(document.getElementById('map'), {
+    zoom: 16,
+    center: { lat: 51.5912874, lng: -0.1080217 },
+    mapTypeId: "satellite"
   });
 
-  drawSpec.forEach(function (d, ii) {
-    var src = document.createElement("div");
-    src.classList = "src";
-    src.style.left = d.srcLeft - minLeft + 'px';
-    src.style.top = d.srcTop - minTop + 'px';
-    src.style.width = d.width + 'px';
-    src.style.height = d.height + 'px';
-    var drawSpec2 = Object.assign({}, d);
-    delete drawSpec2.destTop;
-    delete drawSpec2.destLeft;
-    src.textContent = "drawSpec[" + ii + "] src: " + JSON.stringify(drawSpec2, null, 2);
-    imaginaryCanvasEl.appendChild(src);
+  var overlay = window.overlay = new _mapbox_google_overlay2.default({
+    style: _defaults2.default.style,
+    availableZooms: _defaults2.default.availableZooms,
+    mousemoveSources: Object.keys(_defaults2.default.availableZooms)
   });
 
-  // prepare the proper output canvas :::::::::::::::::::::::::::::::::::::::::
-  var destWrapperEl = document.getElementById("dest-wrapper");
-  destWrapperEl.innerHTML = "";
-  drawSpec.forEach(function (d, ii) {
-    var dest = document.createElement("div");
-    dest.classList = "dest";
-    dest.style.left = d.destLeft + 'px';
-    dest.style.top = d.destTop + 'px';
-    dest.style.width = d.width + 'px';
-    dest.style.height = d.height + 'px';
-    var drawSpec2 = Object.assign({}, d);
-    delete drawSpec2.srcLeft;
-    delete drawSpec2.srcTop;
-    dest.textContent = "drawSpec[" + ii + "] dest: " + JSON.stringify(drawSpec2, null, 2);
-    destWrapperEl.appendChild(dest);
+  overlay.addToMap(map);
+
+  var infoEl = document.getElementById("info");
+
+  overlay.on('mousemove', function (info) {
+    return infoEl.textContent = JSON.stringify(info, null, 2);
   });
+};
 
-  // perform the actual render ::::::::::::::::::::::::::::::::::::::::::::::::
-  var realCanvasEl = document.getElementById("real-canvas");
-  window.renderer && window.renderer.destroyDebugCanvas();
-  window.renderer = new _renderer2.default({ style: style });
+/***/ }),
+/* 674 */
+/***/ (function(module, exports, __webpack_require__) {
 
-  window.renderer.on('data', function (data) {
-    if (data.dataType !== "style") {
-      return;
-    }
+"use strict";
 
-    var ctx = realCanvasEl.getContext('2d');
-    ctx.globalCompositeOperation = 'copy';
-    drawSpec.forEach(function (d) {
-      return renderer.renderTiles(ctx, d, tilesSpec, function (err) {
-        return err ? console.error("renderTiles:" + err) : console.log("done rendering");
-      });
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _renderer = __webpack_require__(469);
+
+var _renderer2 = _interopRequireDefault(_renderer);
+
+var _evented = __webpack_require__(20);
+
+var _evented2 = _interopRequireDefault(_evented);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* global google document */
+var TILE_SIZE = 256;
+
+// This is designed to be used with Object.freeze (because it's slow in Vue otherwise)
+
+function MapboxGoogleOverlay(options) {
+  var _this = this;
+
+  this.mapboxRenderer = new _renderer2.default(options);
+  this.styleLoadedPromise = new Promise(function (res) {
+    return _this.mapboxRenderer.on('data', function (data) {
+      return data.dataType === "style" && res();
     });
   });
+  this.tileSize = new google.maps.Size(TILE_SIZE, TILE_SIZE);
+  this.minZoom = options.minZoom || 10;
+  this.maxZoom = options.maxZoom || 21;
+  this.availableZooms = options.availableZooms;
+  this._unusedTilesPool = [];
+  this._visibleTiles = new Map(); // domEl => {canv, ctx, coord, zoom, renderRef}
+  this._dummyTile = document.createElement('div');
+
+  // some stuff for events, which the consumer may want
+  this.evented = new _evented2.default();
+  this.on = this.evented.on.bind(this.evented);
+  this.off = this.evented.on.bind(this.evented);
+  this.mapboxRenderer.setEventedParent(this.evented, {});
+  this._renderInfo = {
+    tilesPending: 0,
+    errors: 0,
+    startTime: null
+  };
+  this._thawed = { // to allow for changing despite Object.freeze, some can be set externally with setMouseOptions method
+    map: null,
+    _mousemove: null,
+    _click: null,
+    mouseBehaviour: !!options.mouseBehaviour || "features", // can be "everywhere", "features", or "none".
+    clickSources: options.clickSources || [], // when mouseBehavior is "features", this is the list of source names to use when querying in click events
+    mousemoveSources: options.mousemoveSources || [] // same as above, but for mousemove
+  };
 }
 
-document.getElementById("applyBtn").onclick = doIt;
-document.getElementById("styleText").value = JSON.stringify(_defaults2.default.style, null, 2);
-document.getElementById("tilesSpecText").value = JSON.stringify(_defaults2.default.tilesSpec, null, 2);
-document.getElementById("drawSpecText").value = JSON.stringify(_defaults2.default.drawSpec, null, 2);
+var MAX_TILE_POOL_SIZE = 30;
 
-doIt();
+MapboxGoogleOverlay.prototype._createTile = function () {
+  var canv = document.createElement('canvas');
+  canv.width = TILE_SIZE;
+  canv.height = TILE_SIZE;
+  canv.style.imageRendering = 'pixelated';
+  return canv;
+};
+
+MapboxGoogleOverlay.prototype.queryRenderedFeatures = function (opts) {
+  // opts = {lat, lng, zoom}
+  return this.mapboxRenderer.queryRenderedFeatures({
+    lat: opts.lat,
+    lng: opts.lng,
+    tileZ: this.availableZooms[opts.source],
+    source: opts.source,
+    renderedZoom: opts.zoom
+  });
+};
+
+MapboxGoogleOverlay.prototype.setMouseOptions = function (opts) {
+  // see constructor for details
+  Object.assign(this._thawed, opts);
+};
+
+MapboxGoogleOverlay.prototype._getTilesSpec = function (coord, zoom, source) {
+  var availableZoom = this.availableZooms[source];
+
+  if (zoom === availableZoom) {
+    // 3x3 grid of source tiles, where the region of interest is that corresponding to the central source tile
+    var ret = [];
+    for (var x = -1; x <= 1; x++) {
+      for (var y = -1; y <= 1; y++) {
+        ret.push({
+          source: source,
+          z: availableZoom,
+          x: coord.x + x,
+          y: coord.y + y,
+          left: 0 + x * TILE_SIZE,
+          top: 0 + y * TILE_SIZE,
+          size: TILE_SIZE
+        });
+      }
+    }return ret;
+  } else if (zoom > availableZoom) {
+    // this may be either a single source tile, if we are interested in an interior region,
+    // or as much as 4 source tiles, if we have to get the corner of the tile.
+    var shift = zoom - availableZoom;
+    var mask = (1 << shift) - 1;
+    var size = TILE_SIZE * (1 << shift);
+    var _ret = [];
+    for (var _x = -1; _x <= 1; _x++) {
+      for (var _y = -1; _y <= 1; _y++) {
+        if (_x == -1 && (coord.x & mask) !== 0 || _x == +1 && (coord.x & mask) !== mask || _y == -1 && (coord.y & mask) !== 0 || _y == +1 && (coord.y & mask) !== mask) {
+          continue;
+        }
+        _ret.push({
+          source: source,
+          z: availableZoom,
+          x: (coord.x >> shift) + _x,
+          y: (coord.y >> shift) + _y,
+          left: -(coord.x & mask) * TILE_SIZE + _x * size,
+          top: -(coord.y & mask) * TILE_SIZE + _y * size,
+          size: size
+        });
+      }
+    }return _ret;
+  } else {
+    // grid of (nParts+2)x(nPartsx2) source tiles, where the region of interest is that corresponding to the central nParts x nParts tiles
+    var _shift = availableZoom - zoom;
+    var nParts = 1 << _shift;
+    var _ret2 = [];
+    var _size = TILE_SIZE / (1 << _shift);
+    for (var xx = -1; xx <= nParts; xx++) {
+      for (var yy = -1; yy <= nParts; yy++) {
+        _ret2.push({
+          source: source,
+          z: availableZoom,
+          x: (coord.x << _shift) + xx,
+          y: (coord.y << _shift) + yy,
+          left: xx * _size,
+          top: yy * _size,
+          size: _size
+        });
+      }
+    }return _ret2;
+  }
+};
+
+MapboxGoogleOverlay.prototype._renderTile = function (el) {
+  var _this2 = this;
+
+  !this._renderInfo.startTime && (this._renderInfo.startTime = Date.now());
+  this._renderInfo.tilesPending++;
+
+  var state = this._visibleTiles.get(el);
+  this.mapboxRenderer.filterForZoom(state.zoom);
+
+  var tilesSpec = this.mapboxRenderer.getVisibleSources(state.zoom).reduce(function (a, s) {
+    return a.concat(_this2._getTilesSpec(state.coord, state.zoom, s));
+  }, []);
+  state.ctx.globalCompositeOperation = 'copy';
+  state.renderRef = this.mapboxRenderer.renderTiles(state.ctx, { srcLeft: 0, srcTop: 0, width: TILE_SIZE, height: TILE_SIZE, destLeft: 0, destTop: 0 }, tilesSpec, function (err) {
+    _this2._renderInfo.errors += err && err !== "canceled" ? 1 : 0;
+    _this2._renderInfo.tilesPending--;
+    _this2.evented.fire('finishedRender', _this2._renderInfo);
+    if (_this2._renderInfo.tilesPending === 0) {
+      _this2._renderInfo.errors = 0;
+      _this2._renderInfo.startTime = null;
+    }
+  });
+};
+
+MapboxGoogleOverlay.prototype.getTile = function (coord, zoom) {
+  if (zoom < this.minZoom || zoom > this.maxZoom) {
+    return this._dummyTile; // for some reason the zoom limits are ignored so we have to do this
+  }
+  var canv = this._unusedTilesPool.pop() || this._createTile();
+  canv.width = TILE_SIZE; // clear the canvas 
+
+  this._visibleTiles.set(canv, {
+    canv: canv,
+    ctx: canv.getContext('2d'),
+    coord: coord,
+    zoom: zoom,
+    renderRef: null
+  });
+  this._renderTile(canv);
+  return canv;
+};
+
+MapboxGoogleOverlay.prototype.reRenderAll = function () {
+  var _this3 = this;
+
+  this._visibleTiles.forEach(function (state, el) {
+    _this3.mapboxRenderer.releaseRender(state.renderRef);
+    _this3._renderTile(el);
+  });
+};
+
+/* the next four functions wrap similarly named methods in mapboxRenderer
+  and like those methods, they can either be executed immediately or,
+  by default, they will return a function which can be used to trigger
+  execution at a later point. This enables debouncing of changes. */
+MapboxGoogleOverlay.prototype.setPaintProperty = function (layer, prop, val) {
+  var _this4 = this;
+
+  var exec = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : true;
+
+  var result = this.mapboxRenderer.setPaintProperty(layer, prop, val, exec);
+  return exec ? result.then(function (isLatest) {
+    return isLatest && _this4.reRenderAll();
+  }) : function () {
+    return result().then(function (isLatest) {
+      return isLatest && _this4.reRenderAll();
+    });
+  };
+};
+
+MapboxGoogleOverlay.prototype.setFilter = function (layer, filter) {
+  var _this5 = this;
+
+  var exec = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+
+  var result = this.mapboxRenderer.setFilter(layer, filter, exec);
+  return exec ? result.then(function (isLatest) {
+    return isLatest && _this5.reRenderAll();
+  }) : function () {
+    return result().then(function (isLatest) {
+      return isLatest && _this5.reRenderAll();
+    });
+  };
+};
+
+MapboxGoogleOverlay.prototype.setLayers = function (visibleLayers) {
+  var _this6 = this;
+
+  var exec = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+
+  var result = this.mapboxRenderer.setLayers(visibleLayers, exec);
+  return exec ? result.then(function (isLatest) {
+    return isLatest && _this6.reRenderAll();
+  }) : function () {
+    return result().then(function (isLatest) {
+      return isLatest && _this6.reRenderAll();
+    });
+  };
+};
+
+MapboxGoogleOverlay.prototype.setLayerVisibility = function (layer, isVisible) {
+  var _this7 = this;
+
+  var exec = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : true;
+
+  var result = this.mapboxRenderer.setLayerVisibility(layer, isVisible, exec);
+  return exec ? result.then(function (isLatest) {
+    return isLatest && _this7.reRenderAll();
+  }) : function () {
+    return result().then(function (isLatest) {
+      return isLatest && _this7.reRenderAll();
+    });
+  };
+};
+
+// ==================
+
+MapboxGoogleOverlay.prototype.getLayerOriginalFilter = function (layer) {
+  return this.mapboxRenderer.getLayerOriginalFilter(layer);
+};
+
+MapboxGoogleOverlay.prototype.getLayerOriginalPaint = function (layer) {
+  return this.mapboxRenderer.getLayerOriginalPaint(layer);
+};
+
+MapboxGoogleOverlay.prototype.releaseTile = function (el) {
+  if (el === this._dummyTile) {
+    return;
+  }
+  var state = this._visibleTiles.get(el);
+  this.mapboxRenderer.releaseRender(state.renderRef);
+  this._visibleTiles.delete(el);
+  if (this._unusedTilesPool.length < MAX_TILE_POOL_SIZE) {
+    this._unusedTilesPool.push(el);
+  }
+};
+
+MapboxGoogleOverlay.prototype._mouseEvent = function (kind, mouseEvent) {
+  var _this8 = this;
+
+  var overFeature = false;
+
+  if (this._thawed.mouseBehaviour === "none") {
+    return; // don't even try controlling the cursor
+  } else if (this._thawed.mouseBehaviour === "everywhere") {
+    this.evented.fire(kind, { mouseEvent: mouseEvent, features: {}, source: null });
+    overFeature = true;
+  } else {
+    (kind === 'click' ? this._thawed.clickSources : this._thawed.mousemoveSources).forEach(function (source) {
+      var features = _this8.queryRenderedFeatures({
+        lat: mouseEvent.latLng.lat(),
+        lng: mouseEvent.latLng.lng(),
+        zoom: _this8._thawed._map.getZoom(),
+        source: source
+      });
+      if (Object.keys(features).length) {
+        _this8.evented.fire(kind, { source: source, features: features, mouseEvent: mouseEvent });
+        overFeature = true;
+      }
+    });
+  }
+
+  if (kind === "mousemove") {
+    this._thawed._map.setOptions({ draggableCursor: overFeature ? 'pointer' : '' });
+  }
+};
+
+MapboxGoogleOverlay.prototype.addToMap = function (map) {
+  if (map.overlayMapTypes.indexOf(this) !== -1) {
+    return;
+  }
+  map.overlayMapTypes.push(this);
+  this._thawed._map = map;
+  this._thawed._mousemove = google.maps.event.addListener(map, 'mousemove', this._mouseEvent.bind(this, "mousemove"));
+  this._thawed._click = google.maps.event.addListener(map, 'click', this._mouseEvent.bind(this, "click"));
+};
+
+MapboxGoogleOverlay.prototype.removeFromMap = function (map) {
+  var _this9 = this;
+
+  console.assert(map && map === this._thawed._map);
+  var idx = map.overlayMapTypes.indexOf(this);
+  if (idx !== -1) {
+    map.overlayMapTypes.removeAt(idx);
+    google.maps.event.removeListener(this._thawed._mousemove);
+    google.maps.event.removeListener(this._thawed._click);
+  }
+  this._thawed._map = null;
+  this._visibleTiles.forEach(function (v, k) {
+    return _this9.releaseTile(k);
+  });
+};
+
+MapboxGoogleOverlay.prototype.getLayersVisible = function (zoom) {
+  return this.mapboxRenderer.getLayersVisible(zoom);
+};
+
+exports.default = MapboxGoogleOverlay;
 
 /***/ })
 /******/ ]);
-//# sourceMappingURL=main.build.js.map
+//# sourceMappingURL=google.build.js.map

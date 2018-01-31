@@ -14,8 +14,8 @@ fairly up-to-date with the upstream version, and ideally (though this is not cur
 Screenshots from the basic tile rendering demo...
 <img  alt="Mapbox" src="docs/pages/assets/rendertiles.png">
 
-And screenshots from the vector tiles on a google map demo...
-<img  alt="Mapbox" src="docs/pages/assets/rendertiles.png">
+And a screenshot from the vector tiles on a google map demo...
+<img  alt="Mapbox" src="docs/pages/assets/google.png">
 
 Unlike other implementations of vector tiles, this renderer is not designed for rendering a fully
 featured working map, instead its purpose is to give you fine grain control over rendering individual source tiles.  The idea is that you define the position of one or more source tiles on an imaginary infinite canvas, and then select a part of that imaginary canvas to actually render onto a real canvas.  

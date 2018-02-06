@@ -4,22 +4,22 @@
   "description": "",
   "main": "index.html",
   "scripts": {
-    "dev": "webpack-dev-server -d --content-base ./bin --port 9998 --inline"
+    "dev-page": "http-server --proxy localhost:9998"
+    "dev-webpack": "webpack-dev-server -d --content-base ./bin --port 9998 --inline"
   },
   "author": "daniel@landinsight.io",
   "license": "ISC",
   "dependencies": {
-  	"webworkify-webpack": "^2.0.5",
-  	"babel-loader": "^6.2.5",
-    "raw-loader": "^0.5.1",
-    "imports-loader": "^0.6.5",
-    "babel-polyfill": "^6.16.0",
-    "webpack": "^3.0.0",
+    "babel-loader": "^6.2.5",
+    "babel-plugin-transform-class-properties": "^6.23.0",
     "babel-plugin-transform-flow-comments": "^6.22.0",
-    "babel-plugin-transform-class-properties": "^6.23.0"
+    "babel-polyfill": "^6.16.0",
+    "http-server": "^0.11.1",
+    "imports-loader": "^0.6.5",
+    "raw-loader": "^0.5.1",
+    "webpack": "^3.0.0"
   },
   "devDependencies": {
-  	"webpack-dev-server": "^2.3.0"
+    "webpack-dev-server": "^2.3.0"
   }
-    
 }

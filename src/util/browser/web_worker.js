@@ -2,10 +2,9 @@
 
 const WebWorkify = require('webworkify');
 const window = require('../window');
-const workerURL = window.URL.createObjectURL(new WebWorkify(require.resolve('../../source/worker'), {bare: true}));
 
 import type {WorkerInterface} from '../web_worker';
 
 module.exports = function (): WorkerInterface {
-    return (new window.Worker(workerURL): any);
+    return (new window.Worker("mapbox-worker.build.js"): any);
 };

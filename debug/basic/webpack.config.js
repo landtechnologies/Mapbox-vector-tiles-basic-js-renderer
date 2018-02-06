@@ -10,6 +10,10 @@ module.exports = {
     'google': [
       'babel-polyfill',
       './google.js'
+    ],
+    'mapbox-worker': [
+      'babel-polyfill',
+      '../../src/source/worker'
     ]
   },
   output: {
@@ -21,22 +25,13 @@ module.exports = {
     modules: [
       path.resolve(__dirname, "./node_modules"),
       path.resolve(__dirname, "../../node_modules"),
-    ],
-    alias: {
-      'webworkify': 'webworkify-webpack',
-      'workerbabelpolyfill': path.resolve(__dirname, 'workerbabelpolyfill.js')
-    }
+    ]
   },
   resolveLoader: {
     moduleExtensions: ['-loader']
   },
   module: {
     rules: [
-      {
-        test: /source\/worker\.js$/,
-        enforce: 'pre',
-        loader: 'imports-loader?workerbabelpolyfill'
-      },
       {
         test: /\.glsl$/,
         use: 'raw-loader'

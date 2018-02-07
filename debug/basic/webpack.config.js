@@ -10,10 +10,6 @@ module.exports = {
     'google': [
       'babel-polyfill',
       './google.js'
-    ],
-    'mapbox-worker': [
-      'babel-polyfill',
-      '../../src/source/worker'
     ]
   },
   output: {
@@ -27,14 +23,18 @@ module.exports = {
       path.resolve(__dirname, "../../node_modules"),
     ]
   },
-  resolveLoader: {
-    moduleExtensions: ['-loader']
-  },
   module: {
     rules: [
       {
         test: /\.glsl$/,
         use: 'raw-loader'
+      },
+      {
+        test: path.resolve(__dirname,'../../src/source/worker.js'),
+        use: {  
+          loader: 'worker-loader',
+          options: { name: 'worker.js' } // may want to add a version token to the name in production
+        }
       },
       {
         test: /\.js$/,

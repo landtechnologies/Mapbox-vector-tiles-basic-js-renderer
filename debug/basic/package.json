@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.html",
   "scripts": {
-    "dev-page": "http-server --proxy localhost:9998"
+    "dev-page": "http-server --proxy localhost:9998",
     "dev-webpack": "webpack-dev-server -d --content-base ./bin --port 9998 --inline"
   },
   "author": "daniel@landinsight.io",
@@ -17,7 +17,8 @@
     "http-server": "^0.11.1",
     "imports-loader": "^0.6.5",
     "raw-loader": "^0.5.1",
-    "webpack": "^3.0.0"
+    "webpack": "^3.0.0",
+    "worker-loader": "^1.1.0"
   },
   "devDependencies": {
     "webpack-dev-server": "^2.3.0"

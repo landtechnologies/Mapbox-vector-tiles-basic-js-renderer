@@ -175,6 +175,4 @@ class Worker {
     }
 }
 
-module.exports = function createWorker(self: WorkerGlobalScopeInterface) {
-    return new Worker(self);
-};
+const w = new Worker(self);

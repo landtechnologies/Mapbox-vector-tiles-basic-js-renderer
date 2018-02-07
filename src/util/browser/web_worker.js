@@ -1,11 +1,10 @@
 // @flow
 
-const WebWorkify = require('webworkify');
+const Worker = require('../../source/worker');
 const window = require('../window');
-const workerURL = window.URL.createObjectURL(new WebWorkify(require.resolve('../../source/worker'), {bare: true}));
 
 import type {WorkerInterface} from '../web_worker';
 
 module.exports = function (): WorkerInterface {
-    return (new window.Worker(workerURL): any);
+    return (new Worker(): any); // TODO: need to support version number when not in dev mode
 };

@@ -175,7 +175,8 @@ The main change relative to the upstream repository, is the creation of the `src
 
 In addition to those directories some other changes have also been made. Some of these changes were critical to the main renderer function, but others are there only because we needed them for LandInsight.
 
-* The package is built with webpack not with browserify.
+* The package is built with webpack not with browserify. (see `debug/basic` for example webpack config)
+* The worker is split out into a separate file, with webpack's worker-loader.
 * The halo around text is rendered in the same pass as the text itself.
 * You can use `FORMAT_NUMBER(...)` in text fields..see code in `src/util/token.js`.
 * We don't care about Flow or tests here.

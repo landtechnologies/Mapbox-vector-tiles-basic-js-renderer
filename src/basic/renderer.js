@@ -212,7 +212,7 @@ class MapboxBasicRenderer extends Evented {
     }
     this.painter._filterForZoom = zoom;
     this._cancelAllPendingRenders();
-    return ++this._configId;
+    return;
   }
 
   _cancelAllPendingRenders(){ 

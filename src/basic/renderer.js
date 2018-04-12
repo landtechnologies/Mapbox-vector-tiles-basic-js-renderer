@@ -110,7 +110,7 @@ class MapboxBasicRenderer extends Evented {
     this.painter.style = this._style;
   }
 
-  /* For the following 4 methods the return value depends on the flag exec:
+  /* For the following 3 methods the return value depends on the flag exec:
       + when exec=true, the function returns a promise that resolves once the 
       requested change has taken effect. If the value of the promise is true it
       means that this config change was the most recent change, when false it
@@ -126,22 +126,15 @@ class MapboxBasicRenderer extends Evented {
                 : () => this._processConfigQueue(++this._configId);
   }
 
-  setFilter(layer, filter, exec=true){
-    // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
-    this._queuedConfigChanges.push(() => this._style.setFilter(layer, filter));
-    return exec ? this._processConfigQueue(++this._configId)
-                : () => this._processConfigQueue(++this._configId);
-  }
- 
-  setLayerVisibility(layer, isVisible, exec=true){
-    this._queuedConfigChanges.push(() => this._style.setLayoutProperty(layer, 'visibility', isVisible ? 'visible' : 'none'));
+  setLayoutProperty(layer, prop, val, exec=true){
+    this._queuedConfigChanges.push(() => this._style.setLayoutProperty(layer, prop, val));
     return exec ? this._processConfigQueue(++this._configId)
                 : () => this._processConfigQueue(++this._configId);
   }
 
-  setLayers(visibleLayers, exec=true){
-    // takes an array of layer names to show
-    this._queuedConfigChanges.push(() => this._style.setLayers(visibleLayers));
+  setFilter(layer, filter, exec=true){
+    // https://www.mapbox.com/mapbox-gl-js/style-spec/#types-filter
+    this._queuedConfigChanges.push(() => this._style.setFilter(layer, filter));
     return exec ? this._processConfigQueue(++this._configId)
                 : () => this._processConfigQueue(++this._configId);
   }
@@ -198,6 +191,11 @@ class MapboxBasicRenderer extends Evented {
   getLayerOriginalPaint(layerName){
     let layer = this._initStyle.layers.find(lyr => lyr.id === layerName);
     return layer && layer.paint;
+  }
+
+  getLayerOriginalLayout(layerName){
+    let layer = this._initStyle.layers.find(lyr => lyr.id === layerName);
+    return layer && layer.layout;
   }
 
   getVisibleSources(zoom){

@@ -75,7 +75,6 @@ module.exports = function (): WorkerInterface {
 
     parentBus.target = workerBus;
     workerBus.target = parentBus;
-
     new Worker(workerBus);
 
     return parentBus;

@@ -21,25 +21,20 @@ module.exports = {
     modules: [
       path.resolve(__dirname, "./node_modules"),
       path.resolve(__dirname, "../../node_modules"),
-    ],
-    alias: {
-      'webworkify': 'webworkify-webpack',
-      'workerbabelpolyfill': path.resolve(__dirname, 'workerbabelpolyfill.js')
-    }
-  },
-  resolveLoader: {
-    moduleExtensions: ['-loader']
+    ]
   },
   module: {
     rules: [
       {
-        test: /source\/worker\.js$/,
-        enforce: 'pre',
-        loader: 'imports-loader?workerbabelpolyfill'
-      },
-      {
         test: /\.glsl$/,
         use: 'raw-loader'
+      },
+      {
+        test: path.resolve(__dirname,'../../src/source/worker.js'),
+        use: {  
+          loader: 'worker-loader',
+          options: { name: 'worker.js' } // may want to add a version token to the name in production
+        }
       },
       {
         test: /\.js$/,

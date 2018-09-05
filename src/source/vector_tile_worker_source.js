@@ -137,7 +137,7 @@ class VectorTileWorkerSource implements WorkerSource {
             workerTile.showCollisionBoxes = params.showCollisionBoxes;
 
             if (workerTile.status === 'parsing') {
-                workerTile.reloadCallback = callback;
+                workerTile.reloadCallback = done.bind(workerTile);
             } else if (workerTile.status === 'done') {
                 workerTile.parse(workerTile.vectorTile, this.layerIndex, this.actor, done.bind(workerTile));
             }

@@ -1,10 +1,10 @@
 // @flow
 
-const Worker = require('../../source/worker');
-const window = require('../window');
+import window from '../window';
+import mapboxgl from '../../';
 
 import type {WorkerInterface} from '../web_worker';
 
-module.exports = function (): WorkerInterface {
-    return (new Worker(): any); // TODO: need to support version number when not in dev mode
-};
+export default function (): WorkerInterface {
+    return (new window.Worker(mapboxgl.workerUrl): any);
+}

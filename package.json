@@ -17,11 +17,11 @@
     "@mapbox/mapbox-gl-supported": "^1.3.0",
     "@mapbox/point-geometry": "^0.1.0",
     "@mapbox/shelf-pack": "=3.1.0",
+    "@mapbox/sphericalmercator": "github:landtechnologies/sphericalmercator#24a1b89b4edc26fcfd6171d61c27e3a9ea2f885c",
     "@mapbox/tiny-sdf": "^1.1.0",
     "@mapbox/unitbezier": "^0.0.0",
     "@mapbox/vector-tile": "^1.3.0",
     "@mapbox/whoots-js": "^3.0.0",
-    "@mapbox/sphericalmercator": "github:landtechnologies/sphericalmercator#24a1b89b4edc26fcfd6171d61c27e3a9ea2f885c",
     "brfs": "^1.4.0",
     "bubleify": "^0.7.0",
     "csscolorparser": "~1.0.2",
@@ -31,10 +31,11 @@
     "gray-matter": "^3.0.8",
     "grid-index": "^1.0.0",
     "jsonlint-lines-primitives": "~1.6.0",
+    "mapbox-gl-supported": "^1.2.0",
     "minimist": "0.0.8",
     "package-json-versionify": "^1.0.2",
-    "point-geometry": "^0.0.0",
     "pbf": "^3.0.5",
+    "point-geometry": "^0.0.0",
     "quickselect": "^1.0.0",
     "rw": "^1.3.3",
     "shuffle-seed": "^1.1.6",
@@ -52,6 +53,7 @@
     "@mapbox/mapbox-gl-rtl-text": "^0.1.1",
     "@mapbox/mapbox-gl-test-suite": "file:test/integration",
     "babel-eslint": "^7.0.0",
+    "babel-preset-es2015": "^6.24.1",
     "benchmark": "~2.1.0",
     "browserify": "^14.0.0",
     "coveralls": "^2.11.8",
@@ -159,12 +161,12 @@
     "prepublish": "in-publish && run-s build-dev build-min || not-in-publish",
     "codegen": "node build/generate-style-code.js && flow-node build/generate-struct-arrays.js"
   },
-   "bin": {
-     "gl-style-migrate": "src/style-spec/bin/gl-style-migrate",
-     "gl-style-validate": "src/style-spec/bin/gl-style-validate",
-     "gl-style-format": "src/style-spec/bin/gl-style-format",
-     "gl-style-composite": "src/style-spec/bin/gl-style-composite"
-   },
+  "bin": {
+    "gl-style-migrate": "src/style-spec/bin/gl-style-migrate",
+    "gl-style-validate": "src/style-spec/bin/gl-style-validate",
+    "gl-style-format": "src/style-spec/bin/gl-style-format",
+    "gl-style-composite": "src/style-spec/bin/gl-style-composite"
+  },
   "files": [
     "build/",
     "dist/",

@@ -1,22 +1,25 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8">
-    <title>Mapbox Google Overlay</title>
-    <style>
-      #map{
-        width: 90%;
-        height: 600px;
-        margin: 20px 0px;
-      }
-      #info{
-        max-height: 400px;
-        overflow: auto;
-        white-space: pre;
-      }
-    </style>
-  </head>
-  <body>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Mapbox Google Overlay</title>
+  <style>
+    #map {
+      width: 90%;
+      height: 600px;
+      margin: 20px 0px;
+    }
+
+    #info {
+      max-height: 400px;
+      overflow: auto;
+      white-space: pre;
+    }
+  </style>
+</head>
+
+<body>
 
   <div id="settings">
     <h3>Mapbox Google Overlay</h3>
@@ -24,9 +27,15 @@
 
     <section id="intro">
       <h4>Introduction</h4>
-      Please see <a href="https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/" target="_blank">here</a> for the full documentation for <code>renderTiles</code> and <a href="https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/debug/basic/">here</a> for the demo of basic tile rendering.
-      <br><br>
-      In this demo we show how basic tile rendering can be used in a <a href="https://developers.google.com/maps/documentation/javascript/maptypes">google map overlay</a> to render vector tiles on a google map. We are using a single vector source at a single zoom level.
+      Please see <a href="https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/" target="_blank">here</a>
+      for the full documentation for <code>renderTiles</code> and <a href="https://landtechnologies.github.io/Mapbox-vector-tiles-basic-js-renderer/debug/basic/">here</a>
+      for the demo of basic tile rendering.
+      <br><br> In this demo we show how basic tile rendering can be used in a <a href="https://developers.google.com/maps/documentation/javascript/maptypes">google
+        map overlay</a>
+      to render vector tiles on a google map. We are using a single vector source at a single zoom level.
+      <br><br> Tiles for Brighton, UK were obtained free from <a href="https://openmaptiles.com/downloads/tileset/osm/europe/great-britain/england/brighton/?usage=open-source">openmaptiles.com</a>
+      for use, here, in this open source project (see <a href="https://github.com/landtechnologies/Mapbox-vector-tiles-basic-js-renderer/tree/master/debug/basic">readme</a>
+      for more details).
     </section>
 
 
@@ -44,5 +53,6 @@
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDCBbns1owPCeUoVcg55j3WEb3Km1DQZ7w&callback=initMap">
     </script>
 
-  </body>
+</body>
+
 </html>

@@ -385,6 +385,8 @@ class MapboxBasicRenderer extends Evented {
             }
 
             state.tiles.forEach(t => t.tileID.posMatrix = this._calculatePosMatrix(t.left-xx, t.top-yy, t.tileSize));
+            
+            this._canvas.width = OFFSCREEN_CANV_SIZE; // force clear, workaround for bug in chrome on cpu webgl
             this.painter.render(this._style, {showTileBoundaries: false, showOverdrawInspector: false});
 
             relevantConsumers.forEach(c => {

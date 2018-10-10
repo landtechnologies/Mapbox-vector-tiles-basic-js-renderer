@@ -17,12 +17,14 @@ class MapboxBasicRenderer extends Evented {
 
   constructor(options) {
     super();
-    this._canvas = document.createElement('canvas');
-    this._canvas.style.imageRendering = 'pixelated';
-    this._canvas.addEventListener('webglcontextlost', () => console.log("webglcontextlost"), false);
-    this._canvas.addEventListener('webglcontextrestored', () => this._createGlContext(), false); 
-    this._canvas.width = OFFSCREEN_CANV_SIZE;
-    this._canvas.height = OFFSCREEN_CANV_SIZE;
+    if (window.OffscreenCanvas) {
+        this._canvas = new OffscreenCanvas(OFFSCREEN_CANV_SIZE, OFFSCREEN_CANV_SIZE);
+      } else {
+        this._canvas = document.createElement("canvas");
+        this._canvas.style.imageRendering = "pixelated";
+        this._canvas.width = OFFSCREEN_CANV_SIZE;
+        this._canvas.height = OFFSCREEN_CANV_SIZE;
+      }
     this.transform = {
       zoom: 0,
       angle: 0,
@@ -436,6 +438,7 @@ class MapboxBasicRenderer extends Evented {
   }
 
   showCanvasForDebug(){
+    // Note that this won't work if using OffscreenCanvas rather than a basic canvas
     document.body.appendChild(this._canvas);
     this._canvas.style.position = "fixed";
     this._canvas.style.bottom = "0px";

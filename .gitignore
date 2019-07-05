@@ -24,3 +24,4 @@ src/style-spec/dist/index.js
 _batfish_site
 _batfish_tmp
 debug/basic/defaults.js
+webpack_stats.json

@@ -4,80 +4,75 @@ workflows:
   version: 2
   default:
     jobs:
-      - build:
+      - npm_install:
+          context: AWS
           filters:
             tags:
               ignore: /v[0-9]+.[0-9]+.[0-9]+(-.+)?/
-      - build-and-release:
+      - webpack_build:
+          requires:
+            - npm_install
+      - git_version_patch:
+          context: github
+          requires:
+            - webpack_build
           filters:
-            tags:
-              only: /v[0-9]+.[0-9]+.[0-9]+(-.+)?/
             branches:
-              ignore: /.*/
+              only:
+                - master
 
 
 jobs:
-  build:
+  npm_install:
     docker:
-      - image: mbgl/ci:r4-linux-gl-js
-    working_directory: ~/mapbox-gl-js
+      - image: d1manson/clircleci-aws-cli:latest
     steps:
+      - add_ssh_keys:
+          # See https://circleci.com/docs/2.0/add-ssh-key/#advanced-usage
+          fingerprints:
+            - "59:6c:a6:7a:44:58:10:da:0d:89:5b:2e:0e:58:b4:ea"
       - checkout
+      # Download and  pworker dependencies
       - restore_cache:
           keys:
-            - v1-yarn-{{ checksum "yarn.lock" }}
-            - v1-yarn
-      - restore_cache:
-          keys:
-            - v1-lint-{{ .Branch }}
-            - v1-lint
-      - run:
-          name: install dependencies
-          command: yarn
+            - v1-dependencies-{{ checksum "package.json" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+      - run: npm install
       - save_cache:
-          key: v1-yarn-{{ checksum "yarn.lock" }}
           paths:
-            - '~/.yarn'
-            - 'node_modules'
-      - run:
-          name: run tests
-          command: |
-            bash ./.circleci/test.sh
-      - save_cache:
-          key: v1-lint-{{ .Branch }}-{{ .Revision }}
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      - persist_to_workspace:
+          root: .
           paths:
-            - '.eslintcache'
-      - store_artifacts:
-          path: "test/integration/render-tests/index.html"
-      - store_artifacts:
-          path: "test/integration/query-tests/index.html"
-  build-and-release:
+            - .
+  webpack_build:
     docker:
-      - image: mbgl/ci:r4-linux-gl-js
-    working_directory: ~/mapbox-gl-js
+      - image: circleci/node:10
     steps:
-      - checkout
-      - restore_cache:
-          key: v1-mapbox-gl-js-cache
-      - run:
-          name: install dependencies
-          command: yarn
-      - save_cache:
-          key: v1-mapbox-gl-js-cache
+      - attach_workspace:
+          at: .
+      - run: npx webpack
+      - persist_to_workspace:
+          root: .
           paths:
-            - '~/.yarn'
-            - '.eslintcache'
-            - 'node_modules'
-      - run:
-          name: run tests
-          command: |
-            bash ./.circleci/test.sh
-      - store_artifacts:
-          path: "test/integration/render-tests/index.html"
-      - store_artifacts:
-          path: "test/integration/query-tests/index.html"
-      - run:
-          name: deploy
-          when: on_success
-          command: bash ./.circleci/deploy.sh
+            - .
 
+  git_version_patch:
+    docker:
+      - image: circleci/node:10
+    steps:
+      - add_ssh_keys:
+          # See https://circleci.com/docs/2.0/add-ssh-key/#advanced-usage
+          fingerprints:
+            - "59:6c:a6:7a:44:58:10:da:0d:89:5b:2e:0e:58:b4:ea"
+      - attach_workspace:
+          at: .
+      - run: git config user.email "devops@landinsight.io"
+      - run: git config user.name "devops"
+      - run: git add -A
+      - run: git commit -m "[ci skip] webpack build"
+      - run: npm version patch -m "%s [ci skip]"
+      - run: echo "$GITHUB_FINGERPRINT" >> ~/.ssh/known_hosts
+      - run: git push --follow-tags

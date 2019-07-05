@@ -1,7 +1,4 @@
-import BasicRenderer from '../../src/basic/renderer';
-import defaults from './defaults';
 
-window.BasicRenderer = BasicRenderer;
 
 function parseTextAreas(){
   let tilesSpec = window.tilesSpec = document.getElementById("tilesSpecText").value;
@@ -97,7 +94,7 @@ function doIt(){
   // perform the actual render ::::::::::::::::::::::::::::::::::::::::::::::::
   let realCanvasEl = document.getElementById("real-canvas");
   window.renderer && window.renderer.destroyDebugCanvas();
-  window.renderer = new BasicRenderer({style});
+  window.renderer = new mapboxgl.BasicRenderer({style});
 
   window.renderer.on('data',  data => {
     if(data.dataType !== "style") {
@@ -113,8 +110,8 @@ function doIt(){
 }
 
 document.getElementById("applyBtn").onclick = doIt;
-document.getElementById("styleText").value = JSON.stringify(defaults.style, null, 2);
-document.getElementById("tilesSpecText").value = JSON.stringify(defaults.tilesSpec, null, 2);
-document.getElementById("drawSpecText").value = JSON.stringify(defaults.drawSpec, null, 2);
+document.getElementById("styleText").value = JSON.stringify(DEFAULTS.style, null, 2);
+document.getElementById("tilesSpecText").value = JSON.stringify(DEFAULTS.tilesSpec, null, 2);
+document.getElementById("drawSpecText").value = JSON.stringify(DEFAULTS.drawSpec, null, 2);
 
 doIt();

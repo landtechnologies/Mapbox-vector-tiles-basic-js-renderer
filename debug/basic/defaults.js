@@ -1,4 +1,5 @@
-export default {
+
+const DEFAULTS = {
     availableZooms: { openmaptiles: [14] }, // only used in google demo
 
     tilesSpec: [

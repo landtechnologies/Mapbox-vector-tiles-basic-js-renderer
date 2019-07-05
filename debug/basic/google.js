@@ -1,5 +1,4 @@
-import Overlay from "./mapbox_google_overlay";
-import DEFAULTS from "./defaults";
+
 
 window.initMap = function() {
     // this is called when google maps js is loaded
@@ -12,7 +11,7 @@ window.initMap = function() {
         }
     ));
 
-    var overlay = (window.overlay = new Overlay({
+    var overlay = (window.overlay = new MapboxGoogleOverlay({
         style: DEFAULTS.style,
         availableZooms: DEFAULTS.availableZooms,
         mousemoveSources: Object.keys(DEFAULTS.availableZooms)

@@ -49,7 +49,16 @@
       <div id="info"></div>
     </section>
 
-    <script src="google.build.js"></script>
+    <script>
+        const module = {};
+      </script>
+      <script src='../../dist/mapbox-gl.js'></script>
+      <script>
+        const mapboxgl = module.exports;
+      </script>
+      <script src="defaults.js"></script>
+      <script src="mapbox_google_overlay.js"></script>
+      <script src="google.js"></script>
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDCBbns1owPCeUoVcg55j3WEb3Km1DQZ7w&callback=initMap">
     </script>
 

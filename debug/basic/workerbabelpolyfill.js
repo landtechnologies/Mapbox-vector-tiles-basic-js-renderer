@@ -1,1 +1,0 @@
-(typeof window === 'undefined') && require('babel-polyfill'); 

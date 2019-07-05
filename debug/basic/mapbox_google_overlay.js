@@ -1,13 +1,12 @@
 /* global google document */
-import BasicRenderer from '../../src/basic/renderer';
-import Evented from '../../src/util/evented';
+const Evented = mapboxgl.Evented;
 
 var TILE_SIZE = 256; 
 
 // This is designed to be used with Object.freeze (because it's slow in Vue otherwise)
 
 function MapboxGoogleOverlay(options) { 
-  this.mapboxRenderer = new BasicRenderer(options);
+  this.mapboxRenderer = new mapboxgl.BasicRenderer(options);
   this.styleLoadedPromise = new Promise(res => this.mapboxRenderer.on('data', data => (data.dataType === "style") && res()));
   this.tileSize = new google.maps.Size(TILE_SIZE, TILE_SIZE);
   this.minZoom = options.minZoom || 10;
@@ -289,5 +288,3 @@ MapboxGoogleOverlay.prototype.removeFromMap = function(map){
 MapboxGoogleOverlay.prototype.getLayersVisible = function(zoom) {
   return this.mapboxRenderer.getLayersVisible(zoom);
 };
-
-export default MapboxGoogleOverlay;

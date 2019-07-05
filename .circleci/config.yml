@@ -16,6 +16,10 @@ workflows:
           context: github
           requires:
             - webpack_build
+          filters:
+            branches:
+              only:
+                - master
 
 
 jobs:

@@ -30,7 +30,7 @@ jobs:
       - add_ssh_keys:
           # See https://circleci.com/docs/2.0/add-ssh-key/#advanced-usage
           fingerprints:
-            - "59:6c:a6:7a:44:58:10:da:0d:89:5b:2e:0e:58:b4:ea"
+            - "d5:d6:da:3c:15:6b:8d:fb:74:ca:9d:3f:0d:ee:00:86"
       - checkout
       # Download and  pworker dependencies
       - restore_cache:
@@ -66,7 +66,7 @@ jobs:
       - add_ssh_keys:
           # See https://circleci.com/docs/2.0/add-ssh-key/#advanced-usage
           fingerprints:
-            - "59:6c:a6:7a:44:58:10:da:0d:89:5b:2e:0e:58:b4:ea"
+            - "d5:d6:da:3c:15:6b:8d:fb:74:ca:9d:3f:0d:ee:00:86"
       - attach_workspace:
           at: .
       - run: git config user.email "devops@landinsight.io"

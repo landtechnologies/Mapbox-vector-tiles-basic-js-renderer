@@ -17,6 +17,8 @@ class BasicStyle extends Style {
     source_.setEventedParent(this, {source: source_});
     source_.map = this.map;
     source_.tiles = source.tiles;
+    source_.load()
+    this.loadedPromise.then(() => new Promise(res => source_.on('data', e => e.dataType === 'source' && res())));
     this.sourceCaches[id] = new BasicSourceCache(source_);
   }
   

@@ -7,7 +7,7 @@ const Cache = require('../util/lru_cache'),
    
 let sphericalMercator = new SphericalMercator();
 
-const TILE_CACHE_SIZE = 100;
+const TILE_CACHE_SIZE = 20;
 
 const TILE_LOAD_TIMEOUT = 60*1000;
 

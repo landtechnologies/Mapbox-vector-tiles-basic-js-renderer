@@ -209,7 +209,8 @@ class MapboxBasicRenderer extends Evented {
       return;
     }
     this.painter._filterForZoom = zoom;
-    this._cancelAllPendingRenders();
+    // don't cancel pending render because it may renders tiles with different zoom at the same time.
+    // this._cancelAllPendingRenders();
     return;
   }
 

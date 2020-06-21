@@ -8,7 +8,8 @@ const BasicPainter = require('./painter'),
       QueryFeatures = require('../source/query_features'),
       EvaluationParameters = require('../style/evaluation_parameters'),
       Placement = require('../symbol/placement'),
-      assert = require('assert');
+      assert = require('assert'),
+      stylePreprocess = require('./stylePerprocess');
 
 const DEFAULT_RESOLUTION = 256;
 const OFFSCREEN_CANV_SIZE = 1024; 
@@ -38,6 +39,7 @@ class MapboxBasicRenderer extends Evented {
       tileZoom: tile => tile.tileID.canonical.z,
       calculatePosMatrix: tileID => tileID.posMatrix 
     };
+    stylePreprocess(options.style);
     this._initStyle = options.style;
     this._style = new BasicStyle(Object.assign({}, options.style, {transition: {duration: 0}}), this);
     this._style.setEventedParent(this, {style: this._style});

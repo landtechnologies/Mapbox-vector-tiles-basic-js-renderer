@@ -15,8 +15,8 @@ class BasicPainter extends Painter {
   }
   renderLayer(painter, sourceCache, layer, coords) {
     let layerStylesheet = layerStylesheetFromLayer(layer);
-    if (layerStylesheet && layerStylesheet.minzoom_ && this._filterForZoom < layerStylesheet.minzoom_) return;
-    if (layerStylesheet && layerStylesheet.maxzoom_ && this._filterForZoom >= layerStylesheet.maxzoom_) return;
+    if (layerStylesheet && layerStylesheet.minzoom_ && coords[0].overscaledZ < layerStylesheet.minzoom_) return;
+    if (layerStylesheet && layerStylesheet.maxzoom_ && coords[0].overscaledZ >= layerStylesheet.maxzoom_) return;
     super.renderLayer(painter, sourceCache, layer, coords);
   }
 };

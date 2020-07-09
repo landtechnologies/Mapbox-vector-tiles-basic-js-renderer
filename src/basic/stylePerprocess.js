@@ -16,6 +16,6 @@ module.exports = function mvtStylePreprocess(style) {
 
   // delete raster layer
   style.layers = style.layers.filter(l => {
-   return l.type !== 'raster' || l.type !== 'background'
+   return l.type !== 'raster' && l.type !== 'background'
   })
 }

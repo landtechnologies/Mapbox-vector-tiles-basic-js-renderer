@@ -40,5 +40,9 @@ module.exports = {
         exclude: /node_modules/
       }
     ]
-  }
+  },
+  cache: {
+    type: "filesystem",
+    cacheDirectory: "/tmp/webpack-cache",
+  },
 };

@@ -40,13 +40,23 @@ jobs:
             /tmp/babel-cache
           key: ${{ runner.os }}-client-${{ github.ref_name }}-${{ hashFiles('client/webpack.prod.js') }}
       - name: compile
+        env:
+          BABEL_CACHE_PATH: /tmp/babel-cache
         run: |
           rm dist/*.js.map
           rm dist/*.js
-          npm publish
+          npm run build-dev
+          npm run build-min
+          npm pack
+          npm publish $(ls *.tgz)
 
       - name: Tag
         run: |
           git tag $(cat package.json | grep '"version":' | sed 's~"version": "\([0-9\.]\+\)",\?~\1~' | sed 's/\(^ \+\| \+$\)//g')
-          git push --tags
+          git push --tag
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+            name: package
+            path: "*.tgz"
 

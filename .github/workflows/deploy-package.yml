@@ -21,6 +21,9 @@ jobs:
       #       ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Set node version
         uses: actions/setup-node@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+          PACKAGE_ACCESS_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
         with:
           node-version-file: .nvmrc
           cache: 'npm'
@@ -28,6 +31,7 @@ jobs:
       - name: Install node modules
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+          PACKAGE_ACCESS_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
         run: |
           git config --global url."https://${GITHUB_TOKEN}@github.com".insteadOf ssh://git@github.com
           npm ci --verbose
@@ -41,6 +45,7 @@ jobs:
       - name: compile
         env:
           BABEL_CACHE_PATH: /tmp/babel-cache
+          PACKAGE_ACCESS_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
         run: |
           rm dist/*.js.map
           rm dist/*.js
@@ -50,6 +55,8 @@ jobs:
           npm publish $(ls *.tgz) --verbose
 
       - name: Tag
+        env:
+          PACKAGE_ACCESS_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
         run: |
           git tag $(cat package.json | grep '"version":' | sed 's~"version": "\([0-9\.]\+\)",\?~\1~' | sed 's/\(^ \+\| \+$\)//g')
           git push --tag

@@ -14,11 +14,11 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-      - uses: webfactory/ssh-agent@v0.5.3
-        with:
-            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # with:
+          # persist-credentials: false
+      # - uses: webfactory/ssh-agent@v0.5.3
+      #   with:
+      #       ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Set node version
         uses: actions/setup-node@v2
         with:

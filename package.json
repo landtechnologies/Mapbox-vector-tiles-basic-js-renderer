@@ -162,6 +162,7 @@
     "dist/",
     "flow-typed/",
     "src/",
-    ".flowconfig"
+    ".flowconfig",
+    "package-lock.json"
   ]
 }

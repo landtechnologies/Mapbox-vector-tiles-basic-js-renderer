@@ -1,0 +1,50 @@
+name: Deploy
+concurrency:
+  group: "pr-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    if: github.head_ref == 'main' || github.head_ref == 'master'
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+      - uses: webfactory/ssh-agent@v0.5.3
+        with:
+            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Set node version
+        uses: actions/setup-node@v2
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Install node modules
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
+          git config --global url."https://${GITHUB_TOKEN}@github.com".insteadOf ssh://git@github.com
+          npm ci --verbose
+      - name: Cache multiple paths
+        uses: actions/cache@v3
+        with:
+          path: |
+            /tmp/webpack-cache
+            /tmp/babel-cache
+          key: ${{ runner.os }}-client-${{ github.ref_name }}-${{ hashFiles('client/webpack.prod.js') }}
+      - name: compile
+        env:
+          BABEL_CACHE_PATH: /tmp/babel-cache
+        run: |
+          rm dist/*.js.map
+          rm dist/*.js
+          npx webpack
+      - name: compile
+        run: npm publish

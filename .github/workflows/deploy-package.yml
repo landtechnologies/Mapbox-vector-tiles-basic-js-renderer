@@ -9,9 +9,8 @@ on:
       - master
 
 jobs:
-  config:
+  deploy:
     runs-on: ubuntu-latest
-    if: github.head_ref == 'main' || github.head_ref == 'master'
     steps:
       - name: checkout
         uses: actions/checkout@v2

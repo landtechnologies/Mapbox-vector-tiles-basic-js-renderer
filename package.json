@@ -1,7 +1,7 @@
 {
   "name": "@landtechnologies/mapbox-gl",
   "description": "A WebGL interactive maps library",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "main": "dist/mapbox-gl.js",
   "module": "dist/mapbox-gl.js",
   "style": "dist/mapbox-gl.css",
@@ -11,7 +11,7 @@
     "url": "git://github.com/landtechnologies/Mapbox-vector-tiles-basic-js-renderer.git"
   },
   "engines": {
-    "node": ">=6.4.0"
+    "node": ">=12.21.0"
   },
   "dependencies": {
     "@mapbox/gl-matrix": "^0.0.1",

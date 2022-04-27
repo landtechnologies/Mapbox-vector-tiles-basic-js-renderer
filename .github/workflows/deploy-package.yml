@@ -29,7 +29,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
         run: |
-          echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
           git config --global url."https://${GITHUB_TOKEN}@github.com".insteadOf ssh://git@github.com
           npm ci --verbose
       - name: Cache multiple paths

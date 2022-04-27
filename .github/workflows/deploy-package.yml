@@ -48,7 +48,7 @@ jobs:
           npm run build-dev
           npm run build-min
           npm pack
-          npm publish $(ls *.tgz)
+          npm publish $(ls *.tgz) --verbose
 
       - name: Tag
         run: |

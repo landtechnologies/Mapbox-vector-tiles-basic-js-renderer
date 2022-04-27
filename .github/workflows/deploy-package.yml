@@ -9,7 +9,7 @@ on:
       - master
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -40,11 +40,33 @@ jobs:
             /tmp/babel-cache
           key: ${{ runner.os }}-client-${{ github.ref_name }}-${{ hashFiles('client/webpack.prod.js') }}
       - name: compile
-        env:
-          BABEL_CACHE_PATH: /tmp/babel-cache
         run: |
           rm dist/*.js.map
           rm dist/*.js
-          npx webpack
-      - name: compile
-        run: npm publish
+          npm pack
+
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+            name: package
+            path: "*.tgz"
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Upload
+        uses: actions/download-artifact@v2
+        with:
+            name: package
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 12.22.0
+          registry-url: https://npm.pkg.github.com/
+          scope: "@landtechnologies"
+      - run: echo "registry=https://npm.pkg.github.com/@landtechnologies" >> .npmrc
+      - run: npm publish $(ls *.tgz)
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}

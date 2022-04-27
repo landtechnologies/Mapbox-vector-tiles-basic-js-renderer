@@ -43,30 +43,10 @@ jobs:
         run: |
           rm dist/*.js.map
           rm dist/*.js
-          npm pack
+          npm publish
 
-      - name: Upload
-        uses: actions/upload-artifact@v2
-        with:
-            name: package
-            path: "*.tgz"
+      - name: Tag
+        run: |
+          git tag $(cat package.json | grep '"version":' | sed 's~"version": "\([0-9\.]\+\)",\?~\1~' | sed 's/\(^ \+\| \+$\)//g')
+          git push --tags
 
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    steps:
-      - name: Upload
-        uses: actions/download-artifact@v2
-        with:
-            name: package
-      - uses: actions/setup-node@v2
-        with:
-          node-version: 12.22.0
-          registry-url: https://npm.pkg.github.com/
-          scope: "@landtechnologies"
-      - run: echo "registry=https://npm.pkg.github.com/@landtechnologies" >> .npmrc
-      - run: npm publish $(ls *.tgz)
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}

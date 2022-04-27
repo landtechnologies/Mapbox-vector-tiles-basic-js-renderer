@@ -119,10 +119,11 @@
     "./src/util/window.js": "./src/util/browser/window.js"
   },
   "scripts": {
-    "build-dev": "browserify src/index.js --debug --ignore-transform unassertify --standalone mapboxgl > dist/mapbox-gl-dev.js && tap --no-coverage test/build/dev.test.js",
+    "build-dev": "webpack --mode development",
     "watch-dev": "watchify src/index.js --debug --ignore-transform unassertify --standalone mapboxgl --outfile dist/mapbox-gl-dev.js --verbose",
     "watch-style-property-editor": "watchify debug/style_property_editor.js --debug -o debug/style_property_editor_generated.js --standalone StylePropertyEditor --verbose",
-    "build-min": "browserify src/index.js --debug --plugin [minifyify --map mapbox-gl.js.map --output dist/mapbox-gl.js.map] --standalone mapboxgl | derequire > dist/mapbox-gl.js && tap --no-coverage test/build/min.test.js",
+    "build-min": "webpack --mode production",
+    "build-min-old": "browserify src/index.js --debug --plugin [minifyify --map mapbox-gl.js.map --output dist/mapbox-gl.js.map] --standalone mapboxgl | derequire > dist/mapbox-gl.js && tap --no-coverage test/build/min.test.js",
     "build-token": "browserify debug/access_token.js --debug --transform envify > debug/access_token_generated.js",
     "build-benchmarks": "BENCHMARK_VERSION=\"$(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD)\" browserify bench/benchmarks.js --debug --transform envify --outfile bench/benchmarks_generated.js --verbose",
     "watch-benchmarks": "BENCHMARK_VERSION=\"$(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD)\" watchify bench/benchmarks.js --debug --transform envify --outfile bench/benchmarks_generated.js --verbose",

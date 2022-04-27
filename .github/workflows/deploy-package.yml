@@ -42,7 +42,7 @@ jobs:
             /tmp/webpack-cache
             /tmp/babel-cache
           key: ${{ runner.os }}-client-${{ github.ref_name }}-${{ hashFiles('client/webpack.prod.js') }}
-      - name: compile
+      - name: Compile
         env:
           BABEL_CACHE_PATH: /tmp/babel-cache
           PACKAGE_ACCESS_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
@@ -52,11 +52,15 @@ jobs:
           npm run build-dev
           npm run build-min
           npm pack
+      - name: Publish
+        env:
+          BABEL_CACHE_PATH: /tmp/babel-cache
+          PACKAGE_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
           npm publish $(ls *.tgz) --verbose
-
       - name: Tag
         env:
-          PACKAGE_ACCESS_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+          PACKAGE_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git tag $(cat package.json | grep '"version":' | sed 's~"version": "\([0-9\.]\+\)",\?~\1~' | sed 's/\(^ \+\| \+$\)//g')
           git push --tag

@@ -1,7 +1,7 @@
 {
   "name": "@landtechnologies/mapbox-gl",
   "description": "A WebGL interactive maps library",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "main": "dist/mapbox-gl.js",
   "module": "dist/mapbox-gl.js",
   "style": "dist/mapbox-gl.css",

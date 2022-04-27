@@ -12,7 +12,8 @@ module.exports = {
   output: {
     path: resolve("dist"),
     filename: "[name].js",
-    libraryTarget: "commonjs2"
+    libraryTarget: "umd",
+    library: "mapbox-gl"
   },
   resolve: {
     extensions: [".js", ".json"]

@@ -8,7 +8,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
-    "url": "git://github.com/mapbox/mapbox-gl-js.git"
+    "url": "git://github.com/landtechnologies/Mapbox-vector-tiles-basic-js-renderer.git"
   },
   "engines": {
     "node": ">=6.4.0"
@@ -50,16 +50,16 @@
     "webworkify": "^1.5.0"
   },
   "devDependencies": {
-    "@babel/cli": "^7.4.4",
-    "@babel/core": "^7.4.5",
-    "@babel/plugin-proposal-class-properties": "^7.4.4",
-    "@babel/plugin-transform-flow-strip-types": "^7.4.4",
-    "@babel/preset-env": "^7.4.5",
+    "@babel/cli": "^7.17.6",
+    "@babel/core": "^7.17.9",
+    "@babel/plugin-proposal-class-properties": "^7.16.7",
+    "@babel/plugin-transform-flow-strip-types": "^7.16.7",
+    "@babel/preset-env": "^7.16.11",
     "@mapbox/batfish": "^0.13.3",
     "@mapbox/mapbox-gl-rtl-text": "^0.1.1",
     "@mapbox/mapbox-gl-test-suite": "file:test/integration",
-    "babel-eslint": "^7.0.0",
-    "babel-loader": "^8.0.6",
+    "babel-eslint": "^10.1.0",
+    "babel-loader": "^8.2.5",
     "babel-preset-es2015": "^6.24.1",
     "benchmark": "~2.1.0",
     "browserify": "^14.0.0",
@@ -96,7 +96,7 @@
     "prismjs": "^1.8.1",
     "prop-types": "^15.6.0",
     "proxyquire": "^1.7.9",
-    "raw-loader": "^0.5.1",
+    "raw-loader": "^4.0.2",
     "react": "^16.0.0",
     "react-dom": "^16.0.0",
     "react-helmet": "^5.2.0",
@@ -110,33 +110,13 @@
     "stylelint": "^7.10.1",
     "tap": "^10.3.0",
     "watchify": "^3.7.0",
-    "webpack": "^4.35.0",
-    "webpack-cli": "^3.3.5",
+    "webpack": "^5.72.0",
+    "webpack-cli": "^4.9.2",
     "worker-loader": "^2.0.0"
   },
-  "browserify": {
-    "transform": [
-      "unflowify",
-      [
-        "bubleify",
-        {
-          "bubleError": true,
-          "transforms": {
-            "dangerousForOf": true
-          },
-          "objectAssign": "Object.assign"
-        }
-      ],
-      "package-json-versionify",
-      "unassertify",
-      "brfs",
-      "./build/minifyify_style_spec",
-      "./build/strictify"
-    ]
-  },
   "browser": {
-    "./src/util/window.js": "./src/util/browser/window.js",
-    "./src/util/web_worker.js": "./src/util/browser/web_worker.js"
+    "./src/util/web_worker.js": "./src/util/browser/web_worker.js",
+    "./src/util/window.js": "./src/util/browser/window.js"
   },
   "scripts": {
     "build-dev": "browserify src/index.js --debug --ignore-transform unassertify --standalone mapboxgl > dist/mapbox-gl-dev.js && tap --no-coverage test/build/dev.test.js",
@@ -172,10 +152,10 @@
     "codegen": "node build/generate-style-code.js && flow-node build/generate-struct-arrays.js"
   },
   "bin": {
-    "gl-style-migrate": "src/style-spec/bin/gl-style-migrate",
-    "gl-style-validate": "src/style-spec/bin/gl-style-validate",
+    "gl-style-composite": "src/style-spec/bin/gl-style-composite",
     "gl-style-format": "src/style-spec/bin/gl-style-format",
-    "gl-style-composite": "src/style-spec/bin/gl-style-composite"
+    "gl-style-migrate": "src/style-spec/bin/gl-style-migrate",
+    "gl-style-validate": "src/style-spec/bin/gl-style-validate"
   },
   "files": [
     "build/",

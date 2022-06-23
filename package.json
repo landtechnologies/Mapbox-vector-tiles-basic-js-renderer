@@ -84,7 +84,7 @@
     "glob": "^7.0.3",
     "in-publish": "^2.0.0",
     "is-builtin-module": "^1.0.0",
-    "jsdom": "^11.2.0",
+    "jsdom": "^16.5.0",
     "json-stringify-pretty-compact": "^1.0.4",
     "lodash": "^4.16.0",
     "minifyify": "^7.0.1",

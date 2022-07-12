@@ -414,24 +414,25 @@ class MapboxBasicRenderer extends Evented {
   queryRenderedFeatures(opts){
     assert(opts.source);
 
-    let layers = {};
-    this.getLayersVisible(opts.renderedZoom, opts.source)
-        .forEach(lyr => layers[lyr] = this._style._layers[lyr]);
+    const layers = {};
+    const cache = this._style.sourceCaches[opts.source];
 
-    let featuresByRenderLayer = QueryFeatures.rendered(
-      this._style.sourceCaches[opts.source],
-      layers, 
-      opts, 
-      {}, opts.tileZ, 0);
+    this
+      .getLayersVisible(opts.renderedZoom, opts.source)
+      .forEach(lyr => layers[lyr] = this._style._layers[lyr]);
+    
+    const featuresByRenderLayer = !cache ? {} : QueryFeatures.rendered(cache, layers, opts, {}, opts.tileZ, 0); 
 
-    let featuresBySourceLayer = {};
+    const featuresBySourceLayer = {};
     Object.keys(featuresByRenderLayer)
       .forEach(renderLayerName => 
         featuresByRenderLayer[renderLayerName].map(renderLayerFeatures => {
-          let lyr = featuresBySourceLayer[renderLayerFeatures.layer['source-layer']]
-                  = (featuresBySourceLayer[renderLayerFeatures.layer['source-layer']] || []);
-          lyr.push(renderLayerFeatures._vectorTileFeature.properties)
-        }));    
+          const sourceLayerName = renderLayerFeatures.layer['source-layer'];
+          const layer = featuresBySourceLayer[sourceLayerName]
+                  = (featuresBySourceLayer[sourceLayerName] || []);
+          layer.push(renderLayerFeatures._vectorTileFeature.properties)
+        }));
+
     return featuresBySourceLayer;
   }
 

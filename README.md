@@ -1,11 +1,13 @@
 # Mapbox Vector Tile Basic JS Renderer
 
-**This LandInsight project is a fork of [`mapbox-gl-js`](https://github.com/mapbox/mapbox-gl-js).**
+> 🚧 Warning
+> 
+> **This fork of [`mapbox-gl-js`](https://github.com/mapbox/mapbox-gl-js) is no longer actively maintained by LandTech.**
 
 [<img width="200" alt="Mapbox" src="docs/pages/assets/logo.png">](https://www.mapbox.com/) , [<img width="200" alt="LandInsight" src="docs/pages/assets/landinsight.png">](https://www.landinsight.io/)
 
-Please see the [upstream project](https://github.com/mapbox/mapbox-gl-js) for extensive details on vector tiles, styles and more.  This fork is intended to be kept
-fairly up-to-date with the upstream version, and ideally (though this is not currently true) it shouldn't break any functionality of the upstream version.
+Please see the [upstream project](https://github.com/mapbox/mapbox-gl-js) for extensive details on vector tiles, styles and more.  ~~This fork is intended to be kept
+fairly up-to-date with the upstream version, and ideally (though this is not currently true) it shouldn't break any functionality of the upstream version.~~
 
 ## Introduction
 

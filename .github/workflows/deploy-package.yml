@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         # with:
           # persist-credentials: false
       # - uses: webfactory/ssh-agent@v0.5.3

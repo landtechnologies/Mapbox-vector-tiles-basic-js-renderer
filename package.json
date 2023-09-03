@@ -33,7 +33,7 @@
     "grid-index": "^1.0.0",
     "jsonlint-lines-primitives": "~1.6.0",
     "mapbox-gl-supported": "^1.2.0",
-    "minimist": "0.0.8",
+    "minimist": "0.2.4",
     "package-json-versionify": "^1.0.2",
     "pbf": "^3.0.5",
     "point-geometry": "^0.0.0",
